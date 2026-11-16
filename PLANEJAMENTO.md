@@ -303,4 +303,4 @@ Fazer as fases 1 a 4 **offline primeiro** deixa a jogabilidade boa antes de enfr
 
 ### Ainda em aberto
 - Foto de referência da câmera (opcional, já que o modelo tem a "Vista do vídeo").
-- Qual das duas cestas do modelo será a do jogo (sugiro a da direita, com os prédios e o café ao fundo da imagem).
+- Qual das duas cestas do modelo será a do jogo (sugiro a da direita: olhando para ela, o café e os prédios ficam do lado esquerdo da tela).
