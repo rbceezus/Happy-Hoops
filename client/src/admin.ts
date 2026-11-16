@@ -31,7 +31,7 @@ export function initAdmin(app: HTMLElement) {
     preview?.dispose(); preview = null;
     app.innerHTML = `
       <div class="screen"><form class="card stack" id="f">
-        <div><h1>Admin <span>Hoops</span></h1><p class="sub">Área restrita ao criador do jogo.</p></div>
+        <div><h1><span class="g">Admin</span> <span class="o">Hoops</span></h1><p class="sub">Área restrita ao criador do jogo.</p></div>
         <div><label>Senha</label><input type="password" id="pw" autocomplete="current-password" autofocus></div>
         <button class="pri" type="submit">Entrar</button>
         <div class="err" id="e">${esc(msg)}</div>

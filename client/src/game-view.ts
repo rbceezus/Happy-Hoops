@@ -18,7 +18,7 @@ const TEAM_COLORS = [0xe8631a, 0x1f6fe0];
 const TEAM_CSS = ['#ff8a3d', '#4d95ff'];
 
 // Câmera "broadcast" de meia quadra
-const CAM = { x: 0, y: 5.1, z: 13.4, fov: 47, lookY: 1.55, lookZ: 3.0, follow: 0.4, maxX: 4.2 };
+const CAM = { x: 0, y: 5.2, z: 13.8, fov: 47, lookY: 1.5, lookZ: 3.4, follow: 0.4, maxX: 4.2 };
 
 interface Interp { a: AthSnap[]; ball: Snapshot['ball']; flagsFrom: AthSnap[] }
 
@@ -112,6 +112,7 @@ export class GameView {
     for (const e of s.ev) this.events.push({ t: s.t, e });
     // eventos de retorno imediato (HUD) ficam para o loop; dados fixos
     this.updateScoreboard(s);
+    this.updateTips(s);
   }
 
   get score(): [number, number] { return this.latest?.sc ?? [0, 0]; }
@@ -126,12 +127,12 @@ export class GameView {
         <div class="sb-mid"><div class="clk" data-k="clk">12</div><div class="tgt" data-k="tgt">até 5</div></div>
         <div class="sb-team t1"><span class="pts" data-k="s1">0</span><span class="nm" data-k="n1"></span><span class="poss" data-k="poss1">●</span></div>
       </div>
+      <div class="tips" data-k="tips"></div>
       <div class="toast" data-k="toast"></div>
       <div class="banner" data-k="banner"></div>
       <div class="meter" data-k="meter"><div class="mz" data-k="mz"></div><div class="mf" data-k="mf"></div><div class="mk"></div></div>
       <div class="grade" data-k="grade"></div>
       <div class="cards" data-k="cards"></div>
-      <div class="hint">WASD mover · Shift correr · Espaço arremessar/pular · Q/E crossover · R giro · F/clique esq. passe · G/clique dir. pingado · clique dir. (defesa) contestar · Tab trocar · M som</div>
       <button class="mute" data-k="mute" title="Som (M)">🔊</button>
       <button class="qual" data-k="qual" title="Qualidade gráfica">Gráficos: ${this.low ? 'baixo' : 'alto'}</button>`;
     this.els = {};
@@ -151,11 +152,46 @@ export class GameView {
     // cartões dos meus 2 atletas
     const mine = this.teams[this.seat];
     this.els.cards.innerHTML = mine.map((a, i) => `
-      <div class="pc" data-slot="${i}" style="--c:${TEAM_CSS[this.seat]}">
+      <div class="pc" data-slot="${i}" style="--c:${TEAM_CSS[this.seat]}" title="Clique ou tecle ${i + 1} para controlar ${a.apelido}">
+        <kbd class="pc-key">${i + 1}</kbd>
         <div class="pc-num">${a.numero}</div>
         <div class="pc-body"><div class="pc-nm">${a.apelido}</div><div class="pc-bar"><i data-st="${i}"></i></div></div>
         <div class="pc-ovr">${a.overall}</div>
       </div>`).join('');
+    this.bindCards();
+  }
+
+  private bindCards() {
+    this.els.cards.querySelectorAll<HTMLElement>('.pc').forEach((el) => {
+      el.onclick = () => this.controls.inject({ k: 'select', slot: Number(el.dataset.slot) as 0 | 1 });
+    });
+  }
+
+  private tipsKey = '';
+  private updateTips(s: Snapshot) {
+    const me = s.a[this.seat * 2 + s.ctl[this.seat]];
+    const hasBall = !!(me[4] & F.BALL);
+    const off = s.poss === this.seat;
+    const loose = s.ball.st === 'loose' || s.ball.st === 'shot';
+    let key = 'none';
+    if (s.ph === 'check') key = off ? 'check' : 'wait';
+    else if (s.ph === 'live') key = hasBall ? (s.clear ? 'clear' : 'ball') : loose ? 'reb' : off ? 'off' : 'def';
+    if (key === this.tipsKey) return;
+    this.tipsKey = key;
+    const K = (t: string) => `<kbd>${t}</kbd>`;
+    const row = (k: string, d: string) => `<span class="tip">${k}<em>${d}</em></span>`;
+    const T: Record<string, [string, string, string]> = {
+      check: ['ATAQUE', 'Você começa com a bola', row(K('Enter'), 'dar o check e iniciar a jogada')],
+      wait: ['DEFESA', 'O adversário vai dar o check', row(K('WASD'), 'posicione-se') + row(K('Tab'), 'trocar de defensor')],
+      ball: ['ATAQUE · COM A BOLA', 'Vá para a cesta ou crie espaço', row(K('WASD'), 'mover') + row(K('Shift'), 'correr') + row(K('Espaço'), 'segure e solte no verde: arremessar') + row(K('Q') + K('E'), 'crossover') + row(K('R'), 'giro') + row(K('F'), 'passe') + row(K('G'), 'passe pingado')],
+      clear: ['ATAQUE · LIMPE A BOLA', 'Depois do rebote, saia do arco para poder arremessar', row(K('WASD'), 'ir para fora do arco') + row(K('Shift'), 'correr') + row(K('F'), 'passar') + row(K('Q') + K('E'), 'crossover')],
+      off: ['ATAQUE · SEM A BOLA', 'Posicione-se e prepare o rebote', row(K('WASD'), 'mover') + row(K('Espaço'), 'pular (rebote)') + row(K('Tab') + '/' + K('1') + K('2'), 'trocar de jogador')],
+      def: ['DEFESA', 'Marque, contesta e dê toco', row(K('WASD'), 'marcar') + row(K('Shift'), 'correr') + row(K('Clique dir.') + '/' + K('C'), 'segure para contestar') + row(K('Espaço'), 'pule no arremesso (toco)') + row(K('Tab'), 'trocar de defensor')],
+      reb: ['REBOTE', 'Bola no ar!', row(K('WASD'), 'chegar na bola') + row(K('Espaço'), 'pule quando a bola descer') + row(K('Tab'), 'trocar de jogador')],
+    };
+    const t = T[key];
+    this.els.tips.innerHTML = t ? `<div class="tip-h ${key === 'def' || key === 'wait' ? 'd' : key === 'reb' ? 'r' : 'a'}"><b>${t[0]}</b><span>${t[1]}</span></div><div class="tip-r">${t[2]}</div>` : '';
+    this.els.tips.classList.toggle('show', !!t);
   }
 
   private toggleMute() {
@@ -319,6 +355,7 @@ export class GameView {
       case 'check': audio.whistle(); break;
       case 'buzzer': audio.buzzer(); break;
       case 'violation':
+        if (e.m === 'TROCA') { this.toast('Passe a bola (F) para trocar de jogador', 'warn', 1500); break; }
         audio.violation();
         if (e.m) this.toast(e.m === 'LIMPE A BOLA' ? 'LIMPE A BOLA!' : e.m === 'RELÓGIO' ? 'Estourou o relógio de posse' : e.m === 'FORA' ? 'Bola fora' : e.m, 'warn', 1400);
         break;
@@ -361,7 +398,7 @@ export class GameView {
       if (this.pred && this.pred.id === i) { x = this.pred.x; z = this.pred.z; }
       m.root.position.set(x, 0, z);
       m.pose({ speed: a[5], flags: a[4], shotT: a[6], anim: a[7], y: a[3], rot: a[2], dt, t });
-      m.setControlled(i === myId);
+      m.setMarker(i === myId ? "active" : Math.floor(i / 2) === this.seat ? "mate" : "none");
     }
 
     // bola

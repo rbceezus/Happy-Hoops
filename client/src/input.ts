@@ -31,6 +31,9 @@ export class Controls {
 
   setFlush(fn: () => void) { this.onFlush = fn; }
 
+  /** usado pelos cartões clicáveis do HUD */
+  inject(e: InputEvent) { if (this.enabled) this.push(e); }
+
   private push(e: InputEvent) { this.ev.push(e); this.onFlush?.(); }
 
   reset() {
@@ -59,6 +62,8 @@ export class Controls {
       case 'KeyE': this.push({ k: 'cross', dir: 1 }); break;
       case 'KeyR': this.push({ k: 'spin' }); break;
       case 'Tab': this.push({ k: 'switch' }); break;
+      case 'Digit1': this.push({ k: 'select', slot: 0 }); break;
+      case 'Digit2': this.push({ k: 'select', slot: 1 }); break;
       case 'Enter': this.push({ k: 'check' }); break;
       case 'KeyM': this.onMute?.(); break;
     }
@@ -76,6 +81,7 @@ export class Controls {
 
   private mousedown(e: MouseEvent) {
     if (!this.enabled || !this.target.contains(e.target as Node)) return;
+    if ((e.target as HTMLElement).closest?.('.pc, button')) return;
     if (e.button === 0) this.push({ k: 'pass', kind: 'chest' });
     else if (e.button === 2) {
       if (this.hasPossession()) this.push({ k: 'pass', kind: 'bounce' });

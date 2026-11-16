@@ -5,7 +5,7 @@ import {
   ARC_R, ARC_ZC, BOARD_HW, BOARD_Y0, BOARD_Y1, BOARD_Z, CHECK_POS, CORNER_X, COURT, FT_R, FT_Z, HOOP, KEY_HW, RIM_R,
 } from '../../shared/court';
 
-const SKY = 0xc9d3dc;
+const SKY = 0xa6ddf7;
 
 const mat = (c: number, o: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, ...o });

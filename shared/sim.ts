@@ -200,9 +200,15 @@ export class Game {
     if (this.phase !== 'live' && this.phase !== 'score') return;
     if (this.phase === 'score') return;
     switch (ev.k) {
-      case 'switch': {
-        if (this.hasBall(c) || c.shot) return;
-        this.ctl[team] = (1 - c.slot) as 0 | 1;
+      case 'switch':
+      case 'select': {
+        const to = (ev.k === 'select' ? ev.slot : 1 - c.slot) as 0 | 1;
+        if (to === c.slot) return;
+        if (this.hasBall(c) || c.shot) {
+          this.emit({ e: 'violation', m: 'TROCA', t: team, v: 0 });
+          return;
+        }
+        this.ctl[team] = to;
         break;
       }
       case 'shootDown': {

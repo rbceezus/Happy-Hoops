@@ -58,6 +58,7 @@ export type InputEvent =
   | { k: 'cross'; dir: -1 | 1 }
   | { k: 'spin' }
   | { k: 'switch' }
+  | { k: 'select'; slot: 0 | 1 }
   | { k: 'check' };
 
 export interface InputFrame {

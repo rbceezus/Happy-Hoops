@@ -9,6 +9,31 @@ import { TrainingSession, drawFour } from './offline';
 import { portrait } from './preview';
 
 const app = document.getElementById('app')!;
+
+const BALL_SVG = `<svg viewBox="0 0 100 100"><defs><radialGradient id="bg" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffd08a"/><stop offset=".45" stop-color="#ff8a2b"/><stop offset="1" stop-color="#b8420f"/></radialGradient></defs>
+<circle cx="50" cy="50" r="46" fill="url(#bg)"/><g fill="none" stroke="#2a1206" stroke-width="2.6" stroke-linecap="round"><path d="M50 4v92M4 50h92"/><path d="M16 17q34 33 0 66M84 17q-34 33 0 66"/></g>
+<ellipse cx="38" cy="26" rx="22" ry="12" fill="#fff" opacity=".45" transform="rotate(-25 38 26)"/></svg>`;
+
+function aeroBackdrop() {
+  const el = document.createElement('div');
+  el.id = 'aero';
+  const bubbles = Array.from({ length: 18 }, () => {
+    const sz = 18 + Math.random() * 70;
+    return `<i class="bubble" style="width:${sz}px;height:${sz}px;left:${Math.random() * 100}%;animation-duration:${14 + Math.random() * 18}s;animation-delay:${-Math.random() * 24}s"></i>`;
+  }).join('');
+  const clouds = [[8, 60, 70], [30, 22, 95], [55, 40, 80]].map(([top, , dur]) => `<i class="cloud" style="top:${top}%;animation-duration:${dur}s;animation-delay:${-Math.random() * dur}s;opacity:${0.6 + Math.random() * 0.3}"></i>`).join('');
+  el.innerHTML = `<div class="rays"></div><div class="sun"></div>${clouds}
+    <svg class="hill" viewBox="0 0 1440 320" preserveAspectRatio="none"><defs>
+      <linearGradient id="h1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9f46b"/><stop offset="1" stop-color="#3fb73a"/></linearGradient>
+      <linearGradient id="h2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8be04e"/><stop offset="1" stop-color="#278f2e"/></linearGradient></defs>
+      <path d="M0 150 Q240 40 520 120 T1040 100 T1440 90 V320 H0Z" fill="url(#h1)"/>
+      <path d="M0 220 Q300 120 640 200 T1440 170 V320 H0Z" fill="url(#h2)"/>
+      <path d="M0 150 Q240 40 520 120 T1040 100 T1440 90" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3"/></svg>${bubbles}`;
+  document.body.prepend(el);
+  return el;
+}
+const aero = aeroBackdrop();
+const showAero = (on: boolean) => { aero.style.display = on ? '' : 'none'; };
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const getName = () => { try { return localStorage.getItem('hh_name') ?? ''; } catch { return ''; } };
 const setName = (n: string) => { try { localStorage.setItem('hh_name', n); } catch { /* ok */ } };
@@ -48,16 +73,17 @@ function start() {
   // ------------------------------------------------------------------ início
   function home() {
     stopGame();
+    showAero(true);
     window.clearInterval(timer);
     app.innerHTML = `
       <div class="screen"><div class="card stack">
-        <div><h1>Happy <span>Hoops</span></h1><p class="sub">Basquete 2v2 de meia quadra · primeiro a 5 pontos</p></div>
+        <div class="logo">${BALL_SVG}<div><h1><span class="g">Happy</span> <span class="o">Hoops</span></h1><div class="tag">2v2 · meia quadra · até 5</div></div></div>
         <div><label>Seu apelido</label><input id="name" maxlength="16" placeholder="Como você quer ser chamado?" value="${esc(getName())}"></div>
         <button class="pri" id="create">Criar sala</button>
         <div class="row"><input id="code" maxlength="5" placeholder="CÓDIGO" style="text-transform:uppercase;letter-spacing:.2em;text-align:center;font-weight:800"><button id="join">Entrar</button></div>
         <button class="ghost" id="train">Treino contra o computador</button>
         <div class="err" data-err></div>
-        <div class="foot">Windows/Mac/Linux com teclado e mouse · <a href="/admin">Admin</a></div>
+        <div class="foot">Jogue com teclado e mouse · <a href="/admin">Admin</a></div>
       </div></div>`;
     const name = () => (document.getElementById('name') as HTMLInputElement).value.trim();
     document.getElementById('create')!.onclick = () => { initAudio(); setName(name()); net.send({ t: 'create', name: name() }); };
@@ -81,6 +107,7 @@ function start() {
 
   function waiting(r: RoomView) {
     stopGame();
+    showAero(true);
     const me = r.players[r.seat];
     const other = r.players[1 - r.seat];
     app.innerHTML = `
@@ -110,6 +137,7 @@ function start() {
 
   function pick(r: RoomView) {
     stopGame();
+    showAero(true);
     const color = r.seat === 0 ? 0xe8631a : 0x1f6fe0;
     let sel = [...r.picked];
     const me = r.players[r.seat]!;
@@ -150,6 +178,7 @@ function start() {
   // ------------------------------------------------------------------ partida
   function ensureGameRoot() {
     if (gameRoot && gameRoot.isConnected) return gameRoot;
+    showAero(false);
     app.innerHTML = '<div class="game" id="game"></div>';
     gameRoot = document.getElementById('game')!;
     return gameRoot;
