@@ -1,5 +1,18 @@
 # Happy Hoops: planejamento do MVP
 
+> **Status (implementado):** o MVP descrito abaixo já está implementado e testado. Veja o [README](README.md) para rodar.
+> Ajustes feitos em relação ao plano original, durante a implementação:
+> - **Servidor:** `ws` (WebSocket) com salas próprias em vez de Colyseus — menos dependências e o mesmo resultado (código de sala, reconexão em 30 s, servidor autoritativo a 60 Hz com snapshots a 30 Hz).
+> - **Interface:** TypeScript puro + Vite (sem React); lobby, escolha e admin são telas simples em DOM.
+> - **Banco:** SQLite embutido no Node (`node:sqlite`), sem serviço externo.
+> - **Sons:** sintetizados com WebAudio (chuá, aro, tabela, toco, ankle breaker, quique, apito, buzina) — não depende de arquivos externos.
+> - **Limpar a bola:** o arremesso fica **bloqueado** (aparece "LIMPE A BOLA") até o jogador estar fora do arco, em vez de anular a cesta depois.
+> - **Quadra:** jogadores não saem das linhas (a regra de bola fora vale só para a bola solta).
+> - **Verde do medidor:** aproxima a chance de 98% conforme o atributo (68% a 96% sem contestação), em vez de multiplicar por 1,35.
+> - **Escolha:** cada jogador recebe 5 atletas sorteados e escolhe 2; o mesmo aluno pode estar nos dois times.
+> - **Treino:** modo contra o computador (bot), que roda a mesma simulação no navegador.
+> - **Câmera:** estilo gameplay de meia quadra do NBA 2K (seção 6), com os valores em `client/src/game-view.ts` (`CAM`).
+
 Jogo de basquete de meia quadra **2v2 online**, feito para navegador no computador. Duas pessoas jogam uma contra a outra e cada uma controla 2 atletas. Os atletas são alunos cadastrados pelo criador do jogo.
 
 ---
