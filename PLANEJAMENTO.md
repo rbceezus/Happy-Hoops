@@ -57,7 +57,7 @@ CESTA → (placar ≥ 5 ? FIM_DE_JOGO : CHECK do mesmo time)
 
 | Ação | Ataque | Defesa |
 |---|---|---|
-| Mover | **WASD** | **WASD** |
+| Mover | **WASD** (relativo à câmera: W = para a cesta) | **WASD** |
 | Correr | **Shift** (segurar; gasta estamina) | **Shift** |
 | Crossover | **Q** (para a esquerda) / **E** (para a direita) | — |
 | Giro (spin) | **R** | — |
@@ -178,10 +178,29 @@ Ajustes necessários para virar quadra de jogo:
 - Tirar os bonecos de exemplo e a bola parada; os atletas do jogo entram no lugar.
 - **Desempenho:** sombras em 2048 px e fog estão bons; deixar uma opção de qualidade "baixa" (sombras menores) para computadores mais fracos da escola.
 
-### Câmera
-- **Fixa atrás do ataque**, olhando **de frente para a cesta**, um pouco elevada (cerca de 35°), enquadrando a meia quadra inteira.
-- Uso a vista "Vista do vídeo" do modelo como ponto de partida e giro a câmera para apontar para a cesta escolhida.
-- *(Se você ainda tiver a foto de referência, envie para eu acertar altura e ângulo.)*
+### Câmera (estilo gameplay de meia quadra do NBA 2K)
+A câmera do jogo é a mesma ideia da câmera padrão do 2K na meia quadra: **atrás do ataque, de frente para a cesta**, alta o bastante para ver os 4 atletas e baixa o bastante para dar sensação de estar na quadra.
+
+**Posição inicial (valores de partida, ajustáveis no `balance.json`):**
+| Parâmetro | Valor |
+|---|---|
+| Distância da câmera até o aro (no chão) | ~12,5 m (um pouco atrás da linha do meio da quadra) |
+| Altura da câmera | ~5,5 m |
+| Ponto para onde ela olha | ~3 m à frente do aro, a 1,2 m de altura |
+| Inclinação resultante | ~24° para baixo |
+| Campo de visão (FOV) | 45° |
+| Enquadramento | Aro e tabela no terço de cima da tela; linha de 3 inteira visível; topo do arco perto da parte de baixo |
+
+**Movimento (o que faz parecer 2K):**
+- **Segue a bola de lado:** a câmera desliza para a esquerda ou a direita acompanhando ~40% do movimento lateral da bola, com suavização. Ela nunca gira; continua sempre de frente para a cesta.
+- **Aproxima na infiltração:** quando a bola entra no garrafão, a câmera chega até 1,5 m mais perto e desce um pouco. Quando a bola volta para fora do arco, ela recua.
+- **Limites:** a câmera não sai das laterais da quadra, para nunca perder a cesta de vista.
+- **Não troca de lado:** na meia quadra a cesta é sempre a mesma, então a câmera fica fixa nessa direção, tanto no ataque quanto na defesa. Isso evita confusão quando a posse muda.
+- **Momentos especiais:** câmera lenta com leve aproximação no ankle breaker; tremida curta no toco; leve subida acompanhando a bola em arremessos de três.
+
+**Controles relativos à câmera:** W anda em direção à cesta, S volta para o topo, A e D andam para os lados da tela. Como a câmera nunca gira, o comando é sempre o mesmo.
+
+A vista "Vista do vídeo" do modelo serve só de referência para a altura do olhar. A câmera do jogo fica atrás da meia quadra, apontada para a cesta escolhida.
 
 ### Visual
 - Atletas em **3D low-poly**, com cor de pele, cabelo, altura e uniforme por material/cor.
@@ -268,7 +287,7 @@ Os sons podem vir de bancos **CC0** (freesound.org com filtro CC0, ou Kenney.nl)
 
 | Fase | Entrega | Critério de pronto |
 |---|---|---|
-| **0. Base** | Repositório, Vite + Three.js, cenário do artefato "Quadra – modelo 3D" com linhas e aro ajustado, câmera | Meia quadra renderizada com a câmera de frente para a cesta |
+| **0. Base** | Repositório, Vite + Three.js, cenário do artefato "Quadra – modelo 3D" com linhas e aro ajustado, câmera estilo 2K | Meia quadra renderizada com a câmera de frente para a cesta seguindo uma bola de teste |
 | **1. Movimento local** | 1 atleta com WASD, Shift, estamina e colisão | O atleta anda e corre com resposta boa (< 50 ms) |
 | **2. Arremesso e física** | Medidor, trajetória, aro, tabela, chuá e aro | Dá para treinar arremesso offline e o verde é perceptível |
 | **3. Regras** | Máquina de estados, check, limpar, relógio, placar até 5 | Uma partida completa local (hotseat ou bots parados) |
@@ -300,7 +319,7 @@ Fazer as fases 1 a 4 **offline primeiro** deixa a jogabilidade boa antes de enfr
 5. **Escolha:** 5 opções sorteadas por pessoa, escolhe 2; o mesmo aluno pode estar nos dois times.
 6. **Altura:** entra como atributo (P/M/G).
 7. **Teclas:** mapa da seção 3 aprovado.
+8. **Câmera:** estilo gameplay de meia quadra do NBA 2K, de frente para a cesta (seção 6).
 
 ### Ainda em aberto
-- Foto de referência da câmera (opcional, já que o modelo tem a "Vista do vídeo").
 - Qual das duas cestas do modelo será a do jogo (sugiro a da direita: olhando para ela, o café e os prédios ficam do lado esquerdo da tela).
