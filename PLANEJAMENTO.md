@@ -30,8 +30,8 @@ Jogo de basquete de meia quadra **2v2 online**, feito para navegador no computad
 |---|---|
 | Formato | Meia quadra, 2v2 |
 | Pontuação | Cesta de dentro do arco = **1 ponto**; cesta de fora do arco = **2 pontos** |
-| Vitória | Primeiro a **5 pontos**. *(Decidir: vale "ganhar por 2"? Recomendo **não** no MVP.)* |
-| Posse após cesta | **Troca de posse** (padrão). *(Alternativa: "quem faz, sai jogando". Fica configurável.)* |
+| Vitória | Primeiro a **5 pontos** vence direto (sem precisar ganhar por 2) |
+| Posse após cesta | **Quem faz, sai jogando**: a posse fica com quem fez a cesta, que recomeça com check |
 | Check ball | Toda posse nova começa com **check** no topo do garrafão: o defensor "devolve" a bola e o jogo fica vivo |
 | Bola que bateu no aro | Rebote do **ataque**: pode arremessar direto. Rebote da **defesa**: precisa **limpar** (levar a bola para fora do arco) antes de pontuar |
 | Air ball (não tocou no aro) | Rebote do ataque: **reset do relógio, sem precisar limpar**. Rebote da defesa: precisa limpar |
@@ -41,14 +41,14 @@ Jogo de basquete de meia quadra **2v2 online**, feito para navegador no computad
 | Faltas e roubos | **Não existem**. A defesa só pode **contestar** e **dar toco** |
 | Colisão | Jogadores não atravessam uns aos outros (corpo bloqueia corpo), mas não há falta |
 
-> Interpretei "se bater no aro volta e faz cheque" assim: **a defesa que pega o rebote precisa limpar a bola**. Se a sua ideia era outra (por exemplo, todo rebote defensivo volta para o check no topo), basta trocar essa regra. As duas opções ficam simples de implementar como configuração.
+> Confirmado: a defesa que pega o rebote precisa **levar a bola para fora do arco** antes de pontuar.
 
 ### Estados da partida (máquina de estados no servidor)
 ```
 LOBBY → CHECK → BOLA_VIVA → ARREMESSO_NO_AR → (CESTA | REBOTE)
                     ↑                              │
                     └──── LIMPAR (se defesa) ←─────┘
-CESTA → (placar ≥ 5 ? FIM_DE_JOGO : CHECK do outro time)
+CESTA → (placar ≥ 5 ? FIM_DE_JOGO : CHECK do mesmo time)
 ```
 
 ---
@@ -81,7 +81,7 @@ CESTA → (placar ≥ 5 ? FIM_DE_JOGO : CHECK do outro time)
 
 O **overall** é **manual** e serve só para exibição (cartinha do atleta). Ele **não** entra em nenhuma fórmula.
 
-> **Sugestão:** adicionar **altura** (P/M/G) como atributo visual com efeito pequeno (+/− alcance no toco e no rebote). É opcional e posso deixar de fora.
+**Altura** (P/M/G) também entra: muda o tamanho do modelo e dá um efeito pequeno no alcance de toco e rebote (P −8%, M 0, G +8%). Ela é cadastrada no admin.
 
 Normalização usada nas fórmulas: `n(attr) = (attr − 25) / 74` → de 0 a 1.
 
@@ -153,6 +153,7 @@ O atributo `defesa` também define a velocidade lateral do defensor e o raio que
   - **Sala/turma** (ex.: "8º B")
   - **Overall** (manual, de 25 a 99)
   - 8 atributos (sliders de 25 a 99)
+  - **Altura** (P/M/G)
   - **Cor de pele** (paleta com ~8 tons + seletor livre)
   - **Cabelo**: estilo (careca, curto, black power, tranças, moicano, coque) + cor
   - Foto/avatar opcional (fora do MVP)
@@ -161,18 +162,31 @@ O atributo `defesa` também define a velocidade lateral do defensor e o raio que
 
 ---
 
-## 6. Câmera e visual
+## 6. Cenário, câmera e visual
 
-- **Câmera fixa** atrás do ataque, olhando **de frente para a cesta**, um pouco elevada (aprox. 35°). A quadra inteira fica visível, como no modo 2K "Broadcast" virado para a tabela.
-- *(Ainda não recebi a foto de referência. Assim que você enviar, eu ajusto a altura, o ângulo e o FOV.)*
-- Estilo **low-poly 3D**: é leve no navegador e facilita trocar a cor de pele, o cabelo e o uniforme por material ou cor, sem precisar desenhar sprites para cada combinação.
-- Na tela aparecem:
-  - placar
-  - relógio de posse
-  - medidor de arremesso ao lado do atleta
-  - indicador de quem você controla (anel no chão)
-  - aviso "LIMPE A BOLA" quando a posse precisa ser limpa
-- Cores dos times: o anfitrião é laranja e o convidado é azul (cor do uniforme).
+### Cenário: artefato "Quadra – modelo 3D"
+O cenário do jogo será o modelo que você já tem (https://claude.ai/artifact/3pKADEkPATEigBYLVyC2u6). Ele já foi feito em Three.js, a mesma tecnologia do jogo, então o código pode ser reaproveitado quase direto num módulo `client/src/scene/quadra.ts`.
+
+O que o modelo já tem: laje de concreto, gramado, poste, calçada de pedra, arquibancada de madeira, café com velas de sombra, prédios, árvores e **duas cestas** (uma em cada ponta da laje).
+
+Ajustes necessários para virar quadra de jogo:
+- **Usar só uma das cestas** (meia quadra). A outra fica como decoração.
+- **Pintar as linhas** na laje: linha de 3 pontos (arco a 6,75 m), garrafão, linha de lance livre e o ponto do check no topo. Hoje a laje não tem linhas, e o jogo precisa delas para saber se a cesta vale 1 ou 2 e se a bola foi limpa.
+- **Altura do aro:** no modelo o aro está a ~3,49 m do chão; o oficial é 3,05 m. Ajustar para 3,05 m para a física e os pulos ficarem corretos.
+- **Limites da meia quadra:** definir a área jogável (linhas laterais e de fundo) dentro da laje para a regra de bola fora.
+- **Colisão** com aro e tabela (modelos simplificados invisíveis para a física).
+- Tirar os bonecos de exemplo e a bola parada; os atletas do jogo entram no lugar.
+- **Desempenho:** sombras em 2048 px e fog estão bons; deixar uma opção de qualidade "baixa" (sombras menores) para computadores mais fracos da escola.
+
+### Câmera
+- **Fixa atrás do ataque**, olhando **de frente para a cesta**, um pouco elevada (cerca de 35°), enquadrando a meia quadra inteira.
+- Uso a vista "Vista do vídeo" do modelo como ponto de partida e giro a câmera para apontar para a cesta escolhida.
+- *(Se você ainda tiver a foto de referência, envie para eu acertar altura e ângulo.)*
+
+### Visual
+- Atletas em **3D low-poly**, com cor de pele, cabelo, altura e uniforme por material/cor.
+- HUD: placar, relógio de posse, medidor de arremesso ao lado do atleta, anel no chão de quem você controla e aviso **"LIMPE A BOLA"**.
+- Cores dos times: anfitrião = laranja, convidado = azul. Como o mesmo aluno pode estar nos dois times, a cor do uniforme é o que diferencia.
 
 ---
 
@@ -181,10 +195,14 @@ O atributo `defesa` também define a velocidade lateral do defensor e o raio que
 ### Fluxo
 1. A página inicial tem os botões **Criar sala** e **Entrar com código**.
 2. Criar sala gera um **código de 5 caracteres** (sem letras ambíguas: sem 0/O e 1/I) e a pessoa informa um apelido.
-3. O convidado entra com o código e as duas pessoas escolhem **2 atletas cada** na lista de alunos.
-   - *(Decidir: o mesmo aluno pode aparecer nos dois times? Recomendo **não**: quem escolher primeiro fica com ele.)*
-4. Os dois clicam em **Pronto**, a contagem regressiva começa e o jogo inicia com check.
-5. No fim do jogo aparecem as opções **Revanche** (mesma sala) ou **Sair**.
+3. O convidado entra com o código.
+4. **Escolha de atletas:** cada pessoa recebe **5 opções** de atletas, sorteadas entre os alunos ativos, e escolhe **2** para o time.
+   - As 5 opções de cada pessoa são sorteadas separadamente.
+   - **O mesmo aluno pode estar nos dois times.** Dentro do mesmo time não pode repetir.
+   - A cartinha mostra nome, sala, overall, altura e atributos para ajudar na escolha.
+   - Tempo de escolha: 30 s. Se acabar, o jogo completa com os 2 de maior overall das opções.
+5. Os dois clicam em **Pronto**, a contagem regressiva começa e o jogo inicia com check.
+6. No fim do jogo aparecem as opções **Revanche** (mesma sala) ou **Sair**.
 
 ### Regras da sala
 - Máximo de 2 pessoas. A sala expira depois de 10 min sem atividade.
@@ -250,7 +268,7 @@ Os sons podem vir de bancos **CC0** (freesound.org com filtro CC0, ou Kenney.nl)
 
 | Fase | Entrega | Critério de pronto |
 |---|---|---|
-| **0. Base** | Repositório, Vite + Three.js, quadra, cesta e câmera | Quadra renderizada com a câmera da foto |
+| **0. Base** | Repositório, Vite + Three.js, cenário do artefato "Quadra – modelo 3D" com linhas e aro ajustado, câmera | Meia quadra renderizada com a câmera de frente para a cesta |
 | **1. Movimento local** | 1 atleta com WASD, Shift, estamina e colisão | O atleta anda e corre com resposta boa (< 50 ms) |
 | **2. Arremesso e física** | Medidor, trajetória, aro, tabela, chuá e aro | Dá para treinar arremesso offline e o verde é perceptível |
 | **3. Regras** | Máquina de estados, check, limpar, relógio, placar até 5 | Uma partida completa local (hotseat ou bots parados) |
@@ -273,12 +291,16 @@ Fazer as fases 1 a 4 **offline primeiro** deixa a jogabilidade boa antes de enfr
 
 ---
 
-## 12. Decisões em aberto (preciso da sua resposta)
+## 12. Decisões tomadas
 
-1. **Foto da câmera:** envie a foto para eu ajustar o ângulo.
-2. **Posse após cesta:** troca de posse ou "quem faz, sai jogando"?
-3. **Ganhar por 2** ou o primeiro a 5 vence direto?
-4. **Rebote defensivo:** precisa limpar fora do arco (minha interpretação) ou volta direto para o check no topo?
-5. **Mesmo aluno nos dois times:** é permitido?
-6. **Altura** como atributo extra: sim ou não?
-7. **Teclas:** o mapa da seção 3 está bom ou você prefere outro (por exemplo, arremesso no J/K)?
+1. **Cenário:** artefato "Quadra – modelo 3D", com os ajustes da seção 6.
+2. **Posse após cesta:** fica com quem fez.
+3. **Vitória:** primeiro a 5, sem precisar ganhar por 2.
+4. **Rebote defensivo:** precisa levar a bola para fora do arco.
+5. **Escolha:** 5 opções sorteadas por pessoa, escolhe 2; o mesmo aluno pode estar nos dois times.
+6. **Altura:** entra como atributo (P/M/G).
+7. **Teclas:** mapa da seção 3 aprovado.
+
+### Ainda em aberto
+- Foto de referência da câmera (opcional, já que o modelo tem a "Vista do vídeo").
+- Qual das duas cestas do modelo será a do jogo (sugiro a da direita, com os prédios e o café ao fundo da imagem).
