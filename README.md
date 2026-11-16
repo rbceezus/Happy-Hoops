@@ -69,4 +69,12 @@ npm run typecheck
 
 ## Publicação
 
-O servidor entrega o cliente compilado **e** o WebSocket, então um único serviço com processo contínuo basta (Render, Fly.io, Railway…). A Vercel não mantém WebSocket aberto, então não serve para o servidor do jogo. Há um `Dockerfile` pronto; monte um volume em `/app/data` para manter os atletas cadastrados.
+O servidor entrega o cliente compilado **e** o WebSocket, então um único serviço com processo contínuo basta (Render, Fly.io, Railway…). A Vercel não mantém WebSocket aberto, então não serve para o servidor do jogo. Há um `Dockerfile` e um `render.yaml` prontos.
+
+### Deploy no Render
+1. No Render: **New → Blueprint** e aponte para este repositório (branch `main`).
+2. Quando pedir, preencha `ADMIN_PASSWORD` com uma senha forte (o `SESSION_SECRET` é gerado sozinho).
+3. Confirme o plano **Starter** (o disco persistente de 1 GB em `/app/data` guarda os atletas) e a região mais perto dos jogadores.
+4. Depois do deploy, abra `https://SEU-APP.onrender.com/admin`, entre com a senha e cadastre os atletas (mínimo 5 para as escolhas do lobby).
+
+Mantenha **1 instância** (as salas ficam na memória) e não use o plano gratuito: ele dorme e não tem disco.
