@@ -48,7 +48,7 @@ const setName = (n: string) => { try { localStorage.setItem('hh_name', n); } cat
 
 // carrega o modelo com esqueleto (pmndrs/ecctrl) antes das telas; se falhar, usa o boneco simples
 void loadRig().finally(() => {
-  if (location.pathname.startsWith('/admin')) initAdmin(app);
+  if (location.pathname.startsWith('/admin')) { showAero(false); document.body.classList.add('dark'); initAdmin(app); }
   else start();
 });
 
@@ -83,22 +83,8 @@ function start() {
   let heroTimer = 0;
   const stopHero = () => { window.clearInterval(heroTimer); hero?.dispose(); hero = null; };
 
-  function ring(vals: [string, number, string][]) {
-    // anéis concêntricos (estilo "colorização" da referência) com 3 atributos
-    return `<svg viewBox="0 0 120 120" class="rings">${vals.map(([, v, c], i) => {
-      const r = 50 - i * 11, len = 2 * Math.PI * r, f = nrm(v) * 0.75 + 0.1;
-      return `<circle cx="60" cy="60" r="${r}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5"/>
-        <circle cx="60" cy="60" r="${r}" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${len * f} ${len}" transform="rotate(-90 60 60)"/>`;
-    }).join('')}${vals.map(([lb, v], i) => `<text x="60" y="${52 + i * 12}" text-anchor="middle">${v} <tspan>${lb}</tspan></text>`).join('')}</svg>`;
-  }
-  function curve(a: AthleteInfo) {
-    const pts: [string, number][] = [['ARREMESSO 3', a.attrs.arremesso3], ['FINISHING', a.attrs.finishing], ['DRIBLE', a.attrs.drible], ['DEFESA', a.attrs.defesa]];
-    const xs = pts.map((_, i) => 36 + i * 60), ys = pts.map(([, v]) => 66 - nrm(v) * 52);
-    let d = `M${xs[0]},${ys[0]}`;
-    for (let i = 1; i < xs.length; i++) { const mx = (xs[i - 1] + xs[i]) / 2; d += ` C${mx},${ys[i - 1]} ${mx},${ys[i]} ${xs[i]},${ys[i]}`; }
-    return `<svg viewBox="0 0 250 92" class="curve"><path d="${d}" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="1.6"/>
-      ${pts.map(([lb, v], i) => `<text x="${xs[i]}" y="${ys[i] - 7}" text-anchor="middle" class="v">${v}</text><text x="${xs[i]}" y="88" text-anchor="middle">${lb}</text>`).join('')}</svg>`;
-  }
+  const ATTR_SHORT: Record<string, string> = { arremesso3: 'Arremesso 3', arremessoMedia: 'Média dist.', finishing: 'Finishing', passe: 'Passe', rebote: 'Rebote', defesa: 'Defesa', bloqueio: 'Bloqueio', drible: 'Drible' };
+  const GOLD_BALL = `<svg viewBox="0 0 48 48" class="gb" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="24" cy="24" r="20"/><path d="M24 4v40M4 24h40M9 10q15 14 0 28M39 10q-15 14 0 28"/></svg>`;
 
   function home() {
     stopGame();
@@ -107,26 +93,36 @@ function start() {
     document.body.classList.add('dark');
     app.innerHTML = `
       <div class="screen dk home">
-        <div class="spot"></div>
-        <div class="wm">${BALL_SVG}</div>
-        <header class="hd-top">
-          <div class="brand">${BALL_SVG}<span>HAPPY</span><b class="gold">HOOPS</b></div>
-          <div class="hd-tag">2V2 · MEIA QUADRA · ATÉ 5</div>
-        </header>
-        <section class="hd-left">
-          <h1 class="hero-t">ENTRE<br>NA<br>QUADRA</h1>
-          <p class="quote">“Cada aluno é um atleta. Cada cesta conta.<br>Junte seu parceiro, chame o adversário e jogue até 5.”</p>
-          <div class="menu">
-            <div class="namebox"><label>Seu apelido</label><input id="name" maxlength="16" placeholder="Como você quer ser chamado?" value="${esc(getName())}"></div>
-            <button class="mi" id="create"><i>01</i>Criar sala</button>
-            <div class="mi-row"><i>02</i><input id="code" maxlength="5" placeholder="CÓDIGO"><button class="mi-go" id="join">Entrar</button></div>
-            <button class="mi" id="train"><i>03</i>Treino contra o computador</button>
-            <div class="err" data-err></div>
-          </div>
-        </section>
-        <section class="hd-right"><canvas id="hero"></canvas><div class="ringbox" id="ringbox"></div></section>
-        <footer class="hd-bottom" id="feat"></footer>
-        <div class="hints"><span><kbd>ENTER</kbd> Selecionar</span><span><kbd>ESC</kbd> Voltar</span><a href="/admin">Admin</a></div>
+        <svg class="orbits" viewBox="0 0 800 800" aria-hidden="true"><g fill="none" stroke="url(#og)" stroke-width="1">
+          <defs><linearGradient id="og" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3d58a" stop-opacity=".9"/><stop offset="1" stop-color="#8a5f12" stop-opacity=".1"/></linearGradient></defs>
+          <circle cx="400" cy="400" r="150"/><circle cx="400" cy="400" r="230"/><circle cx="400" cy="400" r="320"/><circle cx="400" cy="400" r="410"/></g></svg>
+        <div class="glow"></div>
+        <main class="home-grid">
+          <section class="hl">
+            <div class="brand">${GOLD_BALL}<span>HAPPY <b>HOOPS</b></span></div>
+            <p class="eyebrow">Basquete 2v2 · meia quadra · até 5 pontos</p>
+            <h1 class="h1">Entre na <em>quadra</em>.</h1>
+            <p class="lead">Escolha seus atletas, chame um adversário com o código da sala e decida a partida no timing do arremesso.</p>
+            <div class="panel">
+              <label for="name">Seu apelido</label>
+              <input id="name" maxlength="16" placeholder="Como você quer ser chamado?" value="${esc(getName())}">
+              <button class="gbtn" id="create">Criar sala</button>
+              <div class="split"><span>ou entre numa sala</span></div>
+              <div class="join"><input id="code" maxlength="5" placeholder="CÓDIGO"><button class="obtn" id="join">Entrar</button></div>
+              <button class="tcard" id="train"><b>Treino</b><span>Jogue sozinho contra o computador</span><i>→</i></button>
+              <div class="err" data-err></div>
+            </div>
+            <div class="foot2"><span><kbd>Enter</kbd> selecionar</span><a href="/admin">Área do criador</a></div>
+          </section>
+          <section class="hr">
+            <div class="showcase">
+              <div class="sc-top"><span class="tag">Atleta em destaque</span><span class="dots" id="dots"></span></div>
+              <canvas id="hero"></canvas>
+              <div class="sc-info" id="feat"></div>
+            </div>
+            <div class="stats" id="stats"></div>
+          </section>
+        </main>
       </div>`;
     const name = () => (document.getElementById('name') as HTMLInputElement).value.trim();
     document.getElementById('create')!.onclick = () => { initAudio(); setName(name()); net.send({ t: 'create', name: name() }); };
@@ -137,32 +133,31 @@ function start() {
     (document.getElementById('code') as HTMLInputElement).onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('join')!.click(); };
     document.getElementById('train')!.onclick = () => { initAudio(); startTraining(); };
 
-    // atleta em destaque (gira entre os cadastrados)
     stopHero();
     hero = new Hero3D(document.getElementById('hero') as HTMLCanvasElement);
-    let roster: AthleteInfo[] = DEMO_ATHLETES;
-    let idx = 0;
-    const feature = () => {
-      const a = roster[idx % roster.length];
-      idx++;
+    let roster: AthleteInfo[] = DEMO_ATHLETES.slice(0, 5);
+    let idx = -1;
+    const show = (i: number) => {
+      idx = (i + roster.length) % roster.length;
+      const a = roster[idx];
       hero?.set(a, 0xe8631a);
-      const feat = document.getElementById('feat');
-      const rb = document.getElementById('ringbox');
-      if (!feat || !rb) return;
+      const feat = document.getElementById('feat'), stats = document.getElementById('stats'), dots = document.getElementById('dots');
+      if (!feat || !stats || !dots) return;
       feat.classList.remove('in'); void feat.offsetWidth; feat.classList.add('in');
       feat.innerHTML = `
-        <div class="fmeta"><span>#${a.numero}</span><span>${esc(a.sala)}</span><span>${a.altura === 'P' ? 'BAIXO' : a.altura === 'M' ? 'MÉDIO' : 'ALTO'}</span></div>
-        <div class="fname gold">${esc(a.nome.toUpperCase())}</div>
-        <div class="fsub">${esc(a.apelido)} · atleta em destaque</div>
-        ${curve(a)}
-        <div class="fovr"><b class="gold">${a.overall}</b><span>OVERALL</span></div>`;
-      rb.innerHTML = `<div class="rlabel">PERFIL DO ATLETA</div>${ring([['REB', a.attrs.rebote, '#ff3b4a'], ['PAS', a.attrs.passe, '#2bdc6b'], ['BLQ', a.attrs.bloqueio, '#2f7bff']])}`;
+        <div><div class="chips"><span>#${a.numero}</span><span>${esc(a.sala)}</span><span>${a.altura === 'P' ? 'Baixo' : a.altura === 'M' ? 'Médio' : 'Alto'}</span></div>
+          <div class="nm gold">${esc(a.nome)}</div></div>
+        <div class="ovr"><b class="gold">${a.overall}</b><span>Overall</span></div>`;
+      const top = (Object.entries(a.attrs) as [string, number][]).sort((x, y) => y[1] - x[1]).slice(0, 4);
+      stats.innerHTML = top.map(([k, v]) => `<div class="st"><span>${ATTR_SHORT[k]}</span><b>${v}</b><i><u style="width:${((v - 25) / 74) * 100}%"></u></i></div>`).join('');
+      dots.innerHTML = roster.slice(0, 6).map((_, j) => `<button type="button" class="${j === idx ? 'on' : ''}" data-j="${j}" aria-label="Atleta ${j + 1}"></button>`).join('');
+      dots.querySelectorAll<HTMLElement>('button').forEach((d) => { d.onclick = () => { show(Number(d.dataset.j)); window.clearInterval(heroTimer); heroTimer = window.setInterval(() => show(idx + 1), 7000); }; });
     };
     fetch('/api/roster').then((r) => (r.ok ? r.json() : [])).then((list: AthleteInfo[]) => {
-      if (list.length) { roster = list.sort(() => Math.random() - 0.5); idx = 0; feature(); }
+      if (list.length) { roster = [...list].sort(() => Math.random() - 0.5).slice(0, 6); show(0); }
     }).catch(() => {});
-    feature();
-    heroTimer = window.setInterval(feature, 7000);
+    show(0);
+    heroTimer = window.setInterval(() => show(idx + 1), 7000);
   }
 
   // ------------------------------------------------------------------ sala

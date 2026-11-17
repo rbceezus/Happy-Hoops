@@ -30,8 +30,8 @@ export function initAdmin(app: HTMLElement) {
   function login(msg = '') {
     preview?.dispose(); preview = null;
     app.innerHTML = `
-      <div class="screen"><form class="card stack" id="f">
-        <div><h1><span class="g">Admin</span> <span class="o">Hoops</span></h1><p class="sub">Área restrita ao criador do jogo.</p></div>
+      <div class="screen dk"><form class="card stack" id="f">
+        <div><h1 class="h1" style="font-size:44px">Área do <em>criador</em></h1><p class="sub">Área restrita ao criador do jogo.</p></div>
         <div><label>Senha</label><input type="password" id="pw" autocomplete="current-password" autofocus></div>
         <button class="pri" type="submit">Entrar</button>
         <div class="err" id="e">${esc(msg)}</div>
@@ -55,7 +55,7 @@ export function initAdmin(app: HTMLElement) {
     const render = () => {
       preview?.dispose(); preview = null;
       app.innerHTML = `
-        <div class="screen" style="align-items:flex-start"><div class="admin">
+        <div class="screen dk" style="align-items:flex-start"><div class="admin">
           <div class="card">
             <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Atletas (${list.length})</h2><button class="pri" id="new" style="flex:0 0 auto">+ Novo</button></div>
             <div class="list">${list.map((a) => `
