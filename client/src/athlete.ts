@@ -4,14 +4,14 @@ import { AthleteInfo, F } from '../../shared/types';
 import { BAL } from '../../shared/balance';
 
 const mats = new Map<string, THREE.MeshStandardMaterial>();
-function mat(color: string | number, rough = 0.7): THREE.MeshStandardMaterial {
+export function mat(color: string | number, rough = 0.7): THREE.MeshStandardMaterial {
   const k = `${color}|${rough}`;
   let m = mats.get(k);
   if (!m) { m = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 }); mats.set(k, m); }
   return m;
 }
 
-function mesh(g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, parent?: THREE.Object3D) {
+export function mesh(g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, parent?: THREE.Object3D) {
   const o = new THREE.Mesh(g, m);
   o.position.set(x, y, z);
   o.castShadow = true;
@@ -19,7 +19,7 @@ function mesh(g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, p
   return o;
 }
 
-function numberTexture(n: number, color: string): THREE.CanvasTexture {
+export function numberTexture(n: number, color: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d')!;
@@ -32,7 +32,7 @@ function numberTexture(n: number, color: string): THREE.CanvasTexture {
   return t;
 }
 
-function labelSprite(text: string): THREE.Sprite {
+export function labelSprite(text: string): THREE.Sprite {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 64;
   const g = c.getContext('2d')!;
@@ -67,17 +67,22 @@ export interface AthleteModel {
   height: number;
 }
 
-const shade = (hex: string, k: number) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
+export const shade = (hex: string, k: number) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const seg = (u: number, a: number, b: number) => clamp01((u - a) / (b - a));
 const ease = (t: number) => t * t * (3 - 2 * t);
 
 /** Perfil de revolução (raio, altura) para membros e tronco com formas anatômicas. */
-function lathe(profile: [number, number][], seg = 20) {
+export function lathe(profile: [number, number][], seg = 20) {
   return new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg);
 }
 
 export function buildAthlete(info: AthleteInfo, teamColor: number, opts: { label?: boolean } = {}): AthleteModel {
+  if (riggedBuilder) return riggedBuilder(info, teamColor, opts);
+  return buildProcedural(info, teamColor, opts);
+}
+
+export function buildProcedural(info: AthleteInfo, teamColor: number, opts: { label?: boolean } = {}): AthleteModel {
   const scale = BAL.height[info.altura] ?? 1;
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -452,6 +457,31 @@ function lerp3(a: number, b: number, c: number, t1: number, t2: number) {
   return (a + (b - a) * t1) + (c - (a + (b - a) * t1)) * t2;
 }
 
+/** Orelhas, nariz, olhos, sobrancelhas e boca para uma cabeça elipsoidal de raios (0.093, 0.114, 0.104). */
+export function addFace(head: THREE.Group, info: AthleteInfo) {
+  const skinDark = mat(shade(info.corPele, 0.84), 0.55);
+  const lips = mat(new THREE.Color(info.corPele).lerp(new THREE.Color('#9a4a44'), 0.32).getHex(), 0.45);
+  const skin = new THREE.MeshStandardMaterial({ color: info.corPele, roughness: 0.48 });
+  const eyeW = mat(0xffffff, 0.25), iris = mat(0x3a2418, 0.2), brow = mat(info.corCabelo === '#f5f5f5' ? 0x777777 : info.corCabelo, 0.8);
+  const sph = () => new THREE.SphereGeometry(1, 20, 16);
+  const ell = (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number) => { const o = mesh(sph(), m, x, y, z, head); o.scale.set(sx, sy, sz); return o; };
+  for (const sx of [-1, 1]) ell(skinDark, 0.016, 0.03, 0.02, 0.095 * sx, -0.005, 0);
+  ell(skinDark, 0.013, 0.016, 0.014, 0, -0.024, 0.102);
+  ell(skin, 0.009, 0.026, 0.01, 0, 0.0, 0.1);
+  for (const sx of [-1, 1]) {
+    ell(eyeW, 0.019, 0.012, 0.008, 0.036 * sx, 0.018, 0.094);
+    ell(iris, 0.009, 0.009, 0.008, 0.036 * sx, 0.018, 0.099);
+    const b = mesh(new THREE.BoxGeometry(0.04, 0.0055, 0.008), brow, 0.037 * sx, 0.044, 0.096, head);
+    b.rotation.z = -0.1 * sx; b.castShadow = false;
+  }
+  ell(lips, 0.021, 0.0065, 0.008, 0, -0.06, 0.094).castShadow = false;
+}
+
+// registro do construtor com esqueleto (rigged.ts); sem ele, usa o boneco procedural
+type Builder = (info: AthleteInfo, teamColor: number, opts: { label?: boolean }) => AthleteModel;
+let riggedBuilder: Builder | null = null;
+export const registerRigBuilder = (b: Builder) => { riggedBuilder = b; };
+
 // ================= cabelos =================
 // Cada cabelo é uma malha moldada sobre a cabeça (elipsoide), com linha do cabelo suave,
 // volume por região e textura (cachos) por deslocamento. Fora da área do couro cabeludo,
@@ -493,7 +523,7 @@ function hairShell(
 const onHead = (n: THREE.Vector3, t: number) =>
   new THREE.Vector3(n.x * HEAD_R.x, n.y * HEAD_R.y, n.z * HEAD_R.z).addScaledVector(n, t);
 
-function addHair(head: THREE.Group, info: AthleteInfo) {
+export function addHair(head: THREE.Group, info: AthleteInfo) {
   const color = new THREE.Color(info.corCabelo);
   const curly = ['black', 'cacheado', 'dreads'].includes(info.estiloCabelo);
   const hair = new THREE.MeshStandardMaterial({ color, roughness: curly ? 0.95 : 0.55, metalness: 0 });

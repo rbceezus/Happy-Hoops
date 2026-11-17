@@ -52,6 +52,9 @@ Desenvolvimento com recarga automática: `npm run dev:server` e, em outro termin
 
 Regras: sem faltas nem roubos; defesa só contesta e dá toco. Depois de rebote defensivo é preciso **levar a bola para fora do arco** antes de arremessar. A posse fica com quem fez a cesta. Relógio de posse de 12 s.
 
+## Personagens
+Os atletas usam um modelo humano com esqueleto (do repositório [pmndrs/ecctrl](https://github.com/pmndrs/ecctrl), veja [CREDITS.md](CREDITS.md)): a camisa, a bermuda, os tênis, o rosto e o cabelo são presos aos ossos e coloridos por atleta; as animações (parado, andar, correr, sprint, agachado, pulo, queda) vêm de clipes com transição suave, e as ações de basquete (drible, arremesso, bandeja, enterrada, contestação) são sobrepostas aos ossos em `client/src/rigged.ts`. Se o `.glb` não carregar, o jogo usa automaticamente o boneco simples (`client/src/athlete.ts`).
+
 ## Estrutura
 
 ```

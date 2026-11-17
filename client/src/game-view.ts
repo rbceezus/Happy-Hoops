@@ -409,8 +409,8 @@ export class GameView {
     }
     const ph = t * Math.PI * 3.2;
     const bounce = Math.abs(Math.sin(ph));
-    let side = 0.3;
-    if (f & F.CROSS) side = 0.3 * Math.cos(a[7] * Math.PI);
+    let side = -0.3; // bola na mão direita
+    if (f & F.CROSS) side = -0.3 * Math.cos(a[7] * Math.PI);
     const ahead = 0.34 + Math.min(0.18, a[5] * 0.04);
     return new THREE.Vector3(a[0] + fx * ahead + sx * side, 0.13 + bounce * 0.82 * scale, a[1] + fz * ahead + sz * side);
   }
