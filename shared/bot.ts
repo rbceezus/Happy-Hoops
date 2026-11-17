@@ -41,6 +41,10 @@ export class Bot {
       if (d > stop) { f.mx = (x - me.x) / d; f.mz = (z - me.z) / d; f.run = run && d > 2.5; }
     };
 
+    if (me.dunk && me.dunk.hold === null) {
+      if (me.dunk.e * 1000 >= me.dunk.T * BAL.dunk.releaseU * 1000 + this.shotErr * 0.8) f.ev.push({ k: 'dunkUp', hold: me.dunk.e * 1000 });
+      return f;
+    }
     if (g.hasBall(me)) {
       if (me.shot) {
         if (!me.shot.released && me.shot.t * 1000 >= BAL.shot.idealMs + this.shotErr) {

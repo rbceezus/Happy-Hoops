@@ -25,7 +25,9 @@ Desenvolvimento com recarga automática: `npm run dev:server` e, em outro termin
 | `PORT` | porta (padrão 3000) |
 | `ADMIN_PASSWORD` ou `ADMIN_PASSWORD_HASH` | senha do admin (o hash é `scrypt$salt$hash`) |
 | `SESSION_SECRET` | segredo do cookie de sessão (se ausente, é gerado e salvo no banco) |
-| `DB_PATH` | arquivo SQLite (padrão `data/happy-hoops.db`) — use um disco persistente em produção |
+| `DATABASE_URL` | **recomendado em produção**: PostgreSQL (Render Postgres, Neon, Supabase). Os atletas sobrevivem a qualquer deploy |
+| `DATABASE_SSL` | `1` força SSL, `0` desliga (padrão: automático) |
+| `DB_PATH` | sem `DATABASE_URL`, usa SQLite neste arquivo (padrão `data/happy-hoops.db`) — só persiste com disco persistente |
 | `TRUST_PROXY=1` | usar `X-Forwarded-For` para o limite de tentativas de login (atrás de proxy) |
 | `COOKIE_SECURE=1` | força cookie `Secure` (já é automático com `X-Forwarded-Proto: https`) |
 | `SEED_DEMO=1` | cria atletas de demonstração se o banco estiver vazio |
@@ -42,9 +44,9 @@ Desenvolvimento com recarga automática: `npm run dev:server` e, em outro termin
 | Arremessar | **Espaço** segurado, solte no ponto verde do medidor |
 | Pular (toco / rebote) | **Espaço** sem a bola |
 | Crossover / giro | **Q** · **E** / **R** |
-| Enterrar | **X** (a até ~4 m da cesta, com a bola e o arco já limpo) |
+| Enterrar | segure **X** perto da cesta (até ~4,5 m) e **solte quando o atleta chegar no aro** (medidor de timing) |
 | Passe normal / pingado | **F** ou clique esquerdo / **G** ou clique direito |
-| Contestar (defesa) | segurar **clique direito** (ou **C**) perto do arremessador |
+| Contestar (defesa) | basta ficar **perto** de quem arremessa; segurar **clique direito** (ou **C**) contesta um pouco mais |
 | Trocar de atleta | **Tab** (no ataque, o controle passa a quem recebe o passe) |
 | Som | **M** |
 
@@ -71,6 +73,9 @@ npm run typecheck
 ## Publicação
 
 O servidor entrega o cliente compilado **e** o WebSocket, então um único serviço com processo contínuo basta (Render, Fly.io, Railway…). A Vercel não mantém WebSocket aberto, então não serve para o servidor do jogo. Há um `Dockerfile` e um `render.yaml` prontos.
+
+### Atletas sumindo a cada deploy?
+Sem `DATABASE_URL`, o servidor usa SQLite num arquivo dentro do container, que é apagado a cada deploy (a não ser que exista um disco persistente). Solução: crie um banco PostgreSQL (no Render: **New → PostgreSQL**, plano free serve para testar; ou Neon/Supabase grátis), copie a **Internal Database URL** e coloque em `DATABASE_URL` no Web Service. O painel `/admin` mostra qual banco está em uso e tem **Exportar/Importar backup** (JSON).
 
 ### Deploy no Render
 1. No Render: **New → Blueprint** e aponte para este repositório (branch `main`).

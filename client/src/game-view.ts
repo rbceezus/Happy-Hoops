@@ -23,6 +23,8 @@ const CAM = { x: 0, y: 5.2, z: 13.8, fov: 47, lookY: 1.5, lookZ: 3.4, follow: 0.
 
 interface Interp { a: AthSnap[]; ball: Snapshot['ball']; flagsFrom: AthSnap[] }
 
+const ease01 = (t: number) => t * t * (3 - 2 * t);
+
 export class GameView {
   readonly canvas: HTMLCanvasElement;
   private renderer: THREE.WebGLRenderer;
@@ -44,7 +46,7 @@ export class GameView {
   private hud: HTMLElement;
   private els!: Record<string, HTMLElement>;
   private shootT0: number | null = null;
-  private shootZone: { green: number; zone: string } | null = null;
+  private shootZone: { green: number; zone: string; ideal: number; max: number } | null = null;
   private meterFade = 0;
   private bouncePhase = 0;
   private ballSpin = new THREE.Vector3();
@@ -91,7 +93,7 @@ export class GameView {
     this.controls = new Controls(root);
     this.controls.hasPossession = () => this.latest?.poss === this.seat;
     this.controls.onMute = () => this.toggleMute();
-    this.controls.onShoot = (down, t0) => this.onShoot(down, t0);
+    this.controls.onShoot = (down, t0, kind) => this.onShoot(down, t0, kind);
     this.controls.setFlush(() => this.sendInput());
     this.sendTimer = window.setInterval(() => this.sendInput(), 33);
     window.addEventListener('resize', this.resize);
@@ -187,7 +189,7 @@ export class GameView {
     const T: Record<string, [string, string, string]> = {
       check: ['ATAQUE', 'Você começa com a bola', row(K('Enter'), 'dar o check e iniciar a jogada')],
       wait: ['DEFESA', 'O adversário vai dar o check', row(K('WASD'), 'posicione-se') + row(K('Tab'), 'trocar de defensor')],
-      ball: ['ATAQUE · COM A BOLA', 'Vá para a cesta ou crie espaço', row(K('WASD'), 'mover') + row(K('Shift'), 'correr') + row(K('Espaço'), 'arremessar (solte no verde)') + row(K('Q') + K('E'), 'crossover') + row(K('R'), 'giro') + row(K('X'), 'enterrar (perto)') + row(K('F'), 'passe') + row(K('G'), 'pingado')],
+      ball: ['ATAQUE · COM A BOLA', 'Vá para a cesta ou crie espaço', row(K('WASD'), 'mover') + row(K('Shift'), 'correr') + row(K('Espaço'), 'arremessar (solte no verde)') + row(K('Q') + K('E'), 'crossover') + row(K('R'), 'giro') + row(K('X'), 'segure: enterrar, solte no aro') + row(K('F'), 'passe') + row(K('G'), 'pingado')],
       clear: ['ATAQUE · LIMPE A BOLA', 'Depois do rebote, saia do arco para poder arremessar', row(K('WASD'), 'ir para fora do arco') + row(K('Shift'), 'correr') + row(K('F'), 'passar') + row(K('Q') + K('E'), 'crossover')],
       off: ['ATAQUE · SEM A BOLA', 'Posicione-se e prepare o rebote', row(K('WASD'), 'mover') + row(K('Espaço'), 'pular (rebote)') + row(K('Tab') + '/' + K('1') + K('2'), 'trocar de jogador')],
       def: ['DEFESA', 'Marque, contesta e dê toco', row(K('WASD'), 'marcar') + row(K('Shift'), 'correr') + row(K('Clique dir.') + '/' + K('C'), 'segure: contestar (chegue perto!)') + row(K('Espaço'), 'pule no arremesso/enterrada (toco)') + row(K('Tab'), 'trocar de defensor')],
@@ -237,24 +239,32 @@ export class GameView {
   }
 
   // -------------------------------------------------------------- arremesso (medidor)
-  private onShoot(down: boolean, t0: number) {
+  private onShoot(down: boolean, t0: number, kind: 'shot' | 'dunk') {
     const s = this.latest;
     if (!s) return;
     if (down) {
       const me = s.a[this.seat * 2 + s.ctl[this.seat]];
-      if (!(me[4] & F.BALL)) { this.shootT0 = null; return; }
+      if (!(me[4] & F.BALL) || s.ph !== 'live') { this.shootT0 = null; return; }
       const info = this.teams[this.seat][s.ctl[this.seat]];
       const pos = this.pred ? { x: this.pred.x, z: this.pred.z } : { x: me[0], z: me[1] };
-      const zone = isBeyondArc(pos.x, pos.z) ? 'tres' : dist(pos.x, pos.z, HOOP.x, HOOP.z) <= BAL.shot.finishingRange ? 'finishing' : 'media';
+      const dh = dist(pos.x, pos.z, HOOP.x, HOOP.z);
+      if (kind === 'dunk') {
+        if (dh > BAL.dunk.range) { this.shootT0 = null; return; }
+        const n = nrm(info.attrs.finishing);
+        this.shootT0 = t0;
+        this.shootZone = { green: BAL.dunk.green.base + BAL.dunk.green.perAttr * n, zone: 'dunk', ideal: BAL.dunk.T * BAL.dunk.releaseU * 1000, max: BAL.dunk.maxHoldMs };
+        return;
+      }
+      const zone = isBeyondArc(pos.x, pos.z) ? 'tres' : dh <= BAL.shot.finishingRange ? 'finishing' : 'media';
       const key = zone === 'tres' ? 'arremesso3' : zone === 'media' ? 'arremessoMedia' : 'finishing';
       const n = nrm(info.attrs[key]);
       const green = (BAL.shot.green.base + BAL.shot.green.perAttr * n) * BAL.shot.zoneWindow[zone];
       this.shootT0 = t0;
-      this.shootZone = { green, zone };
+      this.shootZone = { green, zone, ideal: BAL.shot.idealMs, max: BAL.shot.maxHoldMs };
     } else if (this.shootT0 !== null && this.shootZone) {
       const hold = performance.now() - this.shootT0;
-      const err = hold - BAL.shot.idealMs;
-      const ae = Math.abs(err), g = this.shootZone.green;
+      const err = hold - this.shootZone.ideal;
+      const ae = Math.abs(err), g = this.shootZone.green * (1 - BAL.shot.greenShrink * this.lastLevel);
       const grade = ae <= g ? ['PERFEITO!', 'perfect'] : ae <= g * BAL.shot.goodMult ? ['BOM', 'good'] : err < 0 ? ['CEDO', 'bad'] : ['TARDE', 'bad'];
       this.els.grade.textContent = grade[0];
       this.els.grade.className = `grade show ${grade[1]}`;
@@ -263,6 +273,8 @@ export class GameView {
       this.meterFade = performance.now() + 250;
     }
   }
+
+  private lastLevel = 0;
 
   // -------------------------------------------------------------- loop
   private resize = () => {
@@ -358,7 +370,7 @@ export class GameView {
       case 'dunk':
         if (e.v) {
           audio.dunk(); this.punch = 2; this.shake = 1;
-          this.toast(`ENTERRADA! ${this.nameOf(e.a)}`, 'dunk', 1900);
+          this.toast(`${e.m === 'green' ? 'ENTERRADA PERFEITA!' : 'ENTERRADA!'} ${this.nameOf(e.a)}`, 'dunk', 1900);
         } else this.toast(`Enterrada no aro! ${this.nameOf(e.a)}`, 'block', 1300);
         break;
       case 'pass': audio.whoosh(); break;
@@ -382,8 +394,13 @@ export class GameView {
     const f = a[4];
     if (f & F.DUNK) {
       const u = a[7];
-      const y = lerp(1.15, 2.25, clamp(u / 0.5, 0, 1)) * scale + a[3];
-      return new THREE.Vector3(a[0] + fx * 0.15, y, a[1] + fz * 0.15);
+      const y = lerp(1.0, 2.35, ease01(clamp((u - 0.12) / 0.45, 0, 1))) * scale + a[3];
+      return new THREE.Vector3(a[0] + fx * 0.2 - sx * 0.12, y, a[1] + fz * 0.2 - sz * 0.12);
+    }
+    if (f & F.SHOOT && f & F.LAYUP) {
+      const u = clamp(Math.max(0, a[6]) / (BAL.shot.idealMs / 1000), 0, 1);
+      const y = lerp(1.15, 2.45, ease01(u)) * scale + a[3];
+      return new THREE.Vector3(a[0] + fx * lerp(0.3, 0.38, u) - sx * 0.1 * u, y, a[1] + fz * lerp(0.3, 0.38, u) - sz * 0.1 * u);
     }
     if (f & F.SHOOT) {
       const u = clamp(Math.max(0, a[6]) / (BAL.shot.idealMs / 1000), 0, 1);
@@ -542,9 +559,9 @@ export class GameView {
     meter.style.left = `${(v.x * 0.5 + 0.5) * w}px`;
     meter.style.top = `${(-v.y * 0.5 + 0.5) * h}px`;
     meter.classList.add('show');
-    const max = BAL.shot.maxHoldMs;
+    const max = this.shootZone.max;
     const t = this.shootT0 !== null ? now - this.shootT0 : max;
-    const ideal = (BAL.shot.idealMs / max) * 100;
+    const ideal = (this.shootZone.ideal / max) * 100;
     const opp = (1 - this.seat) as 0 | 1;
     const me = it.a[id];
     const lvl = contestLevel(wx, wz, [0, 1].map((k) => {
@@ -552,6 +569,7 @@ export class GameView {
       return { x: q[0], z: q[1], contesting: !!(q[4] & F.CONTEST), airborne: !!(q[4] & F.JUMP), fallen: !!(q[4] & F.FALLEN), def: this.teams[opp][k].attrs.defesa };
     }));
     void me;
+    this.lastLevel = lvl;
     const g = this.shootZone.green * (1 - BAL.shot.greenShrink * lvl);
     this.els.mz.classList.toggle('tight', lvl > 0.35);
     const mz = this.els.mz;

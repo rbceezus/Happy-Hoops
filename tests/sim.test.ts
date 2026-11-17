@@ -7,7 +7,7 @@ function teams(): [typeof DEMO_ATHLETES, typeof DEMO_ATHLETES] {
   return [[DEMO_ATHLETES[0], DEMO_ATHLETES[1]], [DEMO_ATHLETES[2], DEMO_ATHLETES[3]]];
 }
 
-function play(seed: number, maxSeconds = 600) {
+function play(seed: number, maxSeconds = 1500) {
   const g = new Game(teams(), { seed });
   const bots = [new Bot(0, 0.6), new Bot(1, 0.6)];
   let n = 0;
