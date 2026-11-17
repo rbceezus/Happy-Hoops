@@ -65,6 +65,7 @@ export interface AthleteModel {
   setMarker(kind: Marker): void;
   dispose(): void;
   height: number;
+  debug?: () => unknown;
 }
 
 export const shade = (hex: string, k: number) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();

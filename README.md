@@ -55,6 +55,10 @@ Regras: sem faltas nem roubos; defesa só contesta e dá toco. Depois de rebote 
 ## Personagens
 Os atletas usam um modelo humano com esqueleto (do repositório [pmndrs/ecctrl](https://github.com/pmndrs/ecctrl), veja [CREDITS.md](CREDITS.md)): a camisa, a bermuda, os tênis, o rosto e o cabelo são presos aos ossos e coloridos por atleta; as animações (parado, andar, correr, sprint, agachado, pulo, queda) vêm de clipes com transição suave, e as ações de basquete (drible, arremesso, bandeja, enterrada, contestação) são sobrepostas aos ossos em `client/src/rigged.ts`. Se o `.glb` não carregar, o jogo usa automaticamente o boneco simples (`client/src/athlete.ts`).
 
+### Qualidade da animação
+- `tests/anim.test.ts` (roda no `npm test`): mede as velocidades dos clipes direto no `.glb`, garante que o pé não escorrega em nenhuma velocidade do jogo e que a escolha de clipe não fica alternando.
+- `node scripts/anim-probe.cjs` (precisa de playwright e do servidor rodando): mede, com o atleta vestido, o escorregão do pé (cm por passo) e os "estalos" de pose (graus por quadro) em transições: andar/correr/sprint, defesa, arremesso, bandeja, enterrada, pulo, drible, queda e contestação.
+
 ## Estrutura
 
 ```

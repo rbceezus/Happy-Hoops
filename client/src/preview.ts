@@ -57,6 +57,9 @@ export class Preview3D {
   private yaw = 0.5;
   private auto = true;
   /** estado de pose controlável (depuração e testes) */
+  /** depuração: congela a pose automática (o teste chama model.pose manualmente) */
+  paused = false;
+  get rig() { return this.model; }
   poseState = { speed: 0, flags: 0, shotT: -1, anim: 0, y: 0, vf: 0, vl: 0, defending: false };
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -81,7 +84,7 @@ export class Preview3D {
       }
       this.t += 0.016;
       if (this.auto) this.yaw += 0.012;
-      if (this.model) {
+      if (this.model && !this.paused) {
         this.model.root.rotation.y = this.yaw;
         this.model.pose({ ...this.poseState, rot: 0, dt: 0.016, t: this.t });
       }

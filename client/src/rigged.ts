@@ -10,6 +10,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { BAL } from '../../shared/balance';
 import { AthleteInfo, F } from '../../shared/types';
+import { locomotion, type Loco } from './rig-data';
 import { AthleteModel, AthletePose, Marker, addFace, addHair, labelSprite, lathe, mat, mesh, numberTexture, registerRigBuilder, shade } from './athlete';
 
 const S = (n: string) => THREE.PropertyBinding.sanitizeNodeName(n);
@@ -269,6 +270,13 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
     next.enabled = true;
     next.timeScale = timeScale;
     if (ONCE.has(name)) { next.reset().setLoop(THREE.LoopOnce, 1); next.clampWhenFinished = true; } else next.reset().setLoop(THREE.LoopRepeat, Infinity);
+    const LOCO = new Set(['Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop']);
+    if (prev && LOCO.has(name) && LOCO.has(curName)) {
+      // mesma fase da passada (evita o "tropeço" ao trocar de andar para correr)
+      const ph = (prev.time % prev.getClip().duration) / prev.getClip().duration;
+      next.time = ph * next.getClip().duration;
+      fade = Math.max(fade, 0.3);
+    }
     if (prev) next.crossFadeFrom(prev, fade, false);
     next.play();
     curName = name;
@@ -277,20 +285,34 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
 
   // sobreposição de ossos: rotação Δ (eixos do atleta: x = esquerda, y = cima, z = frente), relativa à pose de referência do osso pai
   const qd = new THREE.Quaternion(), qa = new THREE.Quaternion(), qi = new THREE.Quaternion(), qid = new THREE.Quaternion();
+  // O mixer só reescreve os ossos que o clipe atual anima. Se eu somasse deltas sobre um osso que ele não reescreveu,
+  // o delta acumularia a cada quadro (o tronco girava sem parar). Por isso guardo o valor "limpo" (pre) e o que eu escrevi (post):
+  // se o osso ainda vale `post`, o mixer não mexeu nele e a base é `pre`.
+  const pre: Record<string, THREE.Quaternion> = {}, post: Record<string, THREE.Quaternion> = {};
+  const baseOf = (bone: string) => {
+    const q = bones[bone].quaternion;
+    return post[bone] && q.equals(post[bone]) ? pre[bone] : q.clone();
+  };
+  const commit = (bone: string, base: THREE.Quaternion, result: THREE.Quaternion) => {
+    pre[bone] = base; post[bone] = result.clone(); bones[bone].quaternion.copy(result);
+  };
+  // sobreposição de ossos: rotação Δ (eixos do atleta: x = esquerda, y = cima, z = frente), relativa à pose de referência do osso pai
   const absolute = (bone: string, x: number, y: number, z: number, w: number) => {
-    if (w < 0.002) return;
+    if (w < 0.002) { if (post[bone] && bones[bone].quaternion.equals(post[bone])) commit(bone, pre[bone], pre[bone]); return; }
     const p = PARENT[bone];
+    const base = baseOf(bone);
     qd.setFromEuler(eul.set(x, y, z, 'XYZ'));
     qa.copy(rig.refW[p]).invert().multiply(qd).multiply(rig.refW[p]).multiply(rig.refL[bone]);
-    bones[bone].quaternion.slerp(qa, Math.min(1, w));
+    commit(bone, base, base.clone().slerp(qa, Math.min(1, w)));
   };
   const additive = (bone: string, x: number, y: number, z: number, w = 1) => {
-    if (Math.abs(x) + Math.abs(y) + Math.abs(z) < 1e-4) return;
+    const base = baseOf(bone);
+    if (Math.abs(x) + Math.abs(y) + Math.abs(z) < 1e-4) { commit(bone, base, base); return; }
     const p = PARENT[bone];
     qd.setFromEuler(eul.set(x, y, z, 'XYZ'));
     qa.copy(rig.refW[p]).invert().multiply(qd).multiply(rig.refW[p]);
     qi.copy(qid.identity()).slerp(qa, w);
-    bones[bone].quaternion.premultiply(qi);
+    commit(bone, base, qi.clone().multiply(base));
   };
 
   const J: Record<string, number> = {};
@@ -301,10 +323,14 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
   };
   let yaw = 0, airT = 0, landT = 0, prevY = 0, fallT = 0, svf = 0, svl = 0;
   let mode: 'front' | 'side' | 'back' = 'front';
+  let loco: Loco = { clip: 'Idle_Loop', ts: 1, stride: 1 };
+  let locoAge = 0;
+  let hipPre = 0, hipPost: number | null = null;
   let initYaw = true;
 
   const api: AthleteModel = {
     root, height: 1.83 * hScale,
+    debug: () => ({ cur: curName, loco, J: { wA: J.wA, wL: J.wL, hip: J.hip, tLx: J.tLx, kL: J.kL }, mixerTS: mixer.timeScale, actions: Object.entries(actions).filter(([, a]) => a.isRunning() || a.getEffectiveWeight() > 0).map(([n, a]) => ({ n, ts: a.timeScale, ets: +a.getEffectiveTimeScale().toFixed(3), w: +a.getEffectiveWeight().toFixed(2), time: +a.time.toFixed(2) })) }),
     setMarker(k) {
       kind = k; marker.visible = k !== 'none';
       arrow.visible = k === 'active'; ringOut.visible = k === 'active'; ringMat.opacity = k === 'active' ? 0.95 : 0.4;
@@ -354,25 +380,39 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
       prevY = p.y;
       landT = Math.max(0, landT - dt);
       let want = 'Idle_Loop', ts = 1, fade = 0.22;
-      if (fallen) { want = 'Death01'; ts = 2.6; fade = 0.08; fallT = 0.5; }
-      else if (air && !shoot && !dunk) { want = airT < 0.14 ? 'Jump_Start' : 'Jump_Loop'; ts = want === 'Jump_Start' ? 2.2 : 1; fade = 0.08; }
+      if (fallen) { want = 'Death01'; ts = 2.4; fade = 0.16; fallT = 0.5; }
+      else if (air && !shoot && !dunk) { want = airT < 0.14 ? 'Jump_Start' : 'Jump_Loop'; ts = want === 'Jump_Start' ? 2.2 : 1; fade = 0.12; }
       else if (landT > 0) { want = 'Jump_Land'; ts = 2.8; fade = 0.06; }
       else if (shoot || dunk) { want = 'Idle_Loop'; fade = 0.1; }
-      else if (def && moving && speed < 3.6) { want = 'Crouch_Fwd_Loop'; ts = Math.max(0.6, speed / 2.2); }
-      else if (def && !moving) { want = 'Crouch_Idle_Loop'; ts = 1; }
-      else if (moving) {
-        if (speed < 2.4) { want = 'Walk_Loop'; ts = Math.max(0.5, speed / 1.45); }
-        else if (speed < 4.9) { want = 'Jog_Fwd_Loop'; ts = speed / 3.7; }
-        else { want = 'Sprint_Loop'; ts = speed / 6.0; }
-        if (backwards) ts = -Math.abs(ts) * 0.85; // de ré: o clipe roda ao contrário, sem virar o corpo
-      }
+      else if (moving || loco.clip !== 'Idle_Loop') {
+        // locomoção: clipe e velocidade medidos para o pé não escorregar (rig-data.ts); de ré o clipe toca ao contrário
+        const nl = locomotion(sSpeed, loco.clip);
+        if (nl.clip === loco.clip || locoAge > 0.3 || nl.clip === 'Idle_Loop' || loco.clip === 'Idle_Loop') { if (nl.clip !== loco.clip) locoAge = 0; loco = nl; } else loco = locomotion(sSpeed, loco.clip === 'Walk_Loop' ? 'Walk_Loop' : loco.clip);
+        locoAge += dt;
+        want = loco.clip; ts = backwards ? -loco.ts * 0.9 : loco.ts;
+      } else loco = { clip: 'Idle_Loop', ts: 1, stride: 1 };
       if (fallT > 0 && !fallen) { fallT -= dt; if (fallT <= 0.2) fade = 0.35; }
       play(want, fade, ts);
       mixer.update(dt);
+      // passada mais longa (em vez de cadência maior) quando o atleta é mais rápido que o clipe
+      const boost = loco.clip === 'Idle_Loop' ? 1 : loco.stride;
+      if (boost > 1.02 && !air && !shoot && !dunk && !fallen) {
+        model.updateMatrixWorld(true);
+        const pa = new THREE.Vector3(), pb = new THREE.Vector3();
+        const swing = (bone: string, child: string, k: number) => {
+          // ângulo de balanço frente/trás do membro, medido no espaço do modelo (eixo x = esquerda)
+          bones[bone].getWorldPosition(pa); bones[child].getWorldPosition(pb);
+          model.worldToLocal(pa); model.worldToLocal(pb);
+          const ang = -Math.atan2(pb.z - pa.z, -(pb.y - pa.y));
+          additive(bone, (k - 1) * ang, 0, 0);
+        };
+        swing(B.thL, B.snL, boost); swing(B.thR, B.snR, boost);
+        swing(B.uaL, B.faL, 1 + (boost - 1) * 0.8); swing(B.uaR, B.faR, 1 + (boost - 1) * 0.8);
+      }
 
       // ---------- sobreposições de basquete (valores relativos à pose "pendurada")
       // os clipes de agachado são fundos; sobe o quadril para uma base de defesa de basquete
-      const crouchBase = def && !air && !fallen && (curName === 'Crouch_Idle_Loop' || curName === 'Crouch_Fwd_Loop') ? 0.1 : 0;
+      const crouchBase = def && !air && !fallen && moving ? -0.06 : 0;
       let hipDy = crouchBase, lean = 0, headX = 0;
       // alvos: [ombro x, ombro z, cotovelo x] por braço; pernas
       let shLx = 0, shLz = 0.1, elL = -0.2, shRx = 0, shRz = -0.1, elR = -0.2, wrR = 0, wrL = 0;
@@ -381,6 +421,9 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
 
       if (def && !fallen && !air) { // braços abertos, baixos
         wArms = moving ? 0.55 : 0.8; shLx = shRx = -0.55; shLz = 0.95; shRz = -0.95; elL = elR = -0.55; headX = -0.15; lean = 0.08;
+        if (!moving) { // base de defesa parado: pernas afastadas, joelhos flexionados, quadril baixo
+          wLegs = 0.9; thLx = thRx = -0.42; thLz = 0.2; thRz = -0.2; knL = knR = 0.72; anL = anR = 0.2; hipDy = -0.1;
+        }
       }
       if (!def && !ball && !fallen && !air && !shoot && !dunk && !moving) { // pronto para receber: mãos à frente
         wArms = 0.55; shLx = shRx = -0.85; elL = elR = -1.0; shLz = 0.3; shRz = -0.3;
@@ -404,12 +447,12 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
         wArms = wLegs = 1; hipDy = -0.1 * gather * (1 - rise); lean = 0.18 - 0.08 * rise;
         thRx = -1.45 * rise - 0.3 * gather * (1 - rise); knR = 1.7 * rise + 0.5 * gather * (1 - rise); anR = 0.4 * rise;
         thLx = 0.35 * rise - 0.2 * gather * (1 - rise); knL = 0.15 + 0.5 * gather * (1 - rise); anL = 0.7 * rise; thLz = 0.06; thRz = -0.06;
-        shRx = -0.9 - 2.2 * rise; elR = -1.5 + 1.4 * rise; shRz = -0.08; wrR = rise * 0.5 + (f & F.REL ? 0.7 : 0);
+        shRx = -0.9 - 2.2 * rise; elR = -1.5 + 1.4 * rise; shRz = -0.08; wrR = rise * 0.5 + sm('lfollow', f & F.REL ? 0.7 : 0, 14, dt);
         shLx = -1.0 - 0.4 * rise; shLz = 0.75; elL = -0.85; headX = -0.15 - 0.35 * rise; spY = 0.12 * rise; chY = -0.1 * rise;
       } else if (shoot) { // arremesso: carga -> subida -> extensão -> follow-through
         const t = Math.max(0, p.shotT);
         const load = ease(seg(t, 0, 0.2)), rise = ease(seg(t, 0.2, 0.55));
-        const follow = f & F.REL ? 1 : ease(seg(t, 0.55, 0.75));
+        const follow = sm('follow', f & F.REL ? 1 : ease(seg(t, 0.55, 0.75)), 14, dt);
         wArms = wLegs = 1; hipDy = -0.15 * load * (1 - rise); lean = 0.1 - 0.13 * rise;
         knL = knR = 0.95 * load * (1 - rise) + 0.08; thLx = thRx = -0.55 * load * (1 - rise); thLz = 0.09; thRz = -0.09; anL = anR = 0.65 * rise;
         shRx = lerp3(-0.95, -2.35, -2.95, load, rise); elR = lerp3(-1.6, -1.95, -0.15, load, rise); shRz = -0.1; wrR = lerp3(-0.2, -0.9, -0.6, load, rise) + follow * 1.9;
@@ -429,8 +472,9 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
       if (fallen) wArms = wLegs = 0;
 
       // suaviza pesos e alvos (as transições entre ações ficam fluidas)
-      const r = shoot || dunk ? 28 : 16;
-      const wa = sm('wA', wArms, 14, dt), wl = sm('wL', wLegs, 14, dt);
+      const acting = shoot || dunk;
+      const r = acting ? 24 : air ? 8 : 9;
+      const wa = sm('wA', wArms, wArms > (J.wA ?? 0) ? (air ? 8 : 16) : 6, dt), wl = sm('wL', wLegs, wLegs > (J.wL ?? 0) ? 16 : 6, dt);
       const v = (k: string, t: number, rate = r) => sm(k, t, rate, dt);
       // pernas
       absolute(B.thL, v('tLx', thLx), 0, v('tLz', thLz), wl); absolute(B.thR, v('tRx', thRx), 0, v('tRz', thRz), wl);
@@ -446,7 +490,7 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
       additive(B.sp1, lv * 0.3, sy * 0.5 + tw * 0.25, 0); additive(B.sp2, lv * 0.35, sy * 0.5 + tw * 0.3, 0); additive(B.sp3, lv * 0.35, cy + tw * 0.35, 0);
       additive(B.neck, v('hdX', headX) * 0.5, tw * 0.1, 0); additive(B.head, v('hdX2', headX) * 0.5, tw * 0.1, 0);
       // altura do quadril (agachar / carga do arremesso)
-      bones[B.hips].position.y += v('hip', hipDy, 20);
+      { const hp = bones[B.hips].position; const clean = hipPost !== null && Math.abs(hp.y - hipPost) < 1e-9 ? hipPre : hp.y; hipPre = clean; hp.y = clean + v('hip', hipDy, 20); hipPost = hp.y; }
 
       root.position.y = p.y;
       shadow.position.y = 0.02 - p.y;
