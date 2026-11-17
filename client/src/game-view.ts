@@ -435,7 +435,7 @@ export class GameView {
       const rvx = (x - pv[0]) / Math.max(dt, 0.001), rvz = (z - pv[1]) / Math.max(dt, 0.001);
       pv[0] = x; pv[1] = z;
       if (Math.hypot(rvx, rvz) < 12) {
-        const k = 1 - Math.exp(-12 * dt);
+        const k = 1 - Math.exp(-8 * dt);
         this.vel[i][0] += (rvx - this.vel[i][0]) * k; this.vel[i][1] += (rvz - this.vel[i][1]) * k;
       }
       const [vx, vz] = this.vel[i];

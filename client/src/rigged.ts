@@ -299,7 +299,8 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
     J[k] += (target - J[k]) * (1 - Math.exp(-rate * dt));
     return J[k];
   };
-  let yaw = 0, airT = 0, landT = 0, prevY = 0, fallT = 0;
+  let yaw = 0, airT = 0, landT = 0, prevY = 0, fallT = 0, svf = 0, svl = 0;
+  let mode: 'front' | 'side' | 'back' = 'front';
   let initYaw = true;
 
   const api: AthleteModel = {
@@ -324,13 +325,26 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
         if (kind === 'active') { marker.scale.setScalar(pulse * 1.05); arrow.position.y = 2.6 * hScale + Math.sin(p.t * 5) * 0.08; } else marker.scale.setScalar(0.85);
       }
 
-      // ---------- direção do corpo: anda de frente; em deslize/ré o corpo vira para o movimento e o tronco compensa
-      const phi = moving ? Math.atan2(vl, vf) : 0;
-      const sideways = moving && (Math.abs(phi) > 0.7);
+      // ---------- direção do corpo
+      // O corpo olha para onde o servidor manda (p.rot). Só quando o atleta se move claramente de lado
+      // ele vira o quadril para o movimento (no máximo ~85°) e o tronco compensa; de ré ele anda de costas
+      // sem girar. Velocidade suavizada + histerese + giro com velocidade máxima evitam o "gira-gira".
+      const kv = 1 - Math.exp(-6 * dt);
+      svf += (vf - svf) * kv; svl += (vl - svl) * kv;
+      const sSpeed = Math.hypot(svf, svl);
+      const phi = Math.atan2(svl, svf);
+      if (mode === 'front') { if (sSpeed > 1.4 && Math.abs(phi) > 2.3) mode = 'back'; else if (sSpeed > 1.4 && Math.abs(phi) > 0.95) mode = 'side'; }
+      else if (sSpeed < 0.9) mode = 'front';
+      else if (mode === 'side' && (Math.abs(phi) < 0.6 || Math.abs(phi) > 2.6)) mode = Math.abs(phi) > 2.6 ? 'back' : 'front';
+      else if (mode === 'back' && Math.abs(phi) < 2.0) mode = Math.abs(phi) > 0.95 ? 'side' : 'front';
       const act = shoot || dunk || fallen;
-      const targetYaw = act || !sideways ? p.rot : p.rot + phi;
+      const sideways = !act && mode === 'side';
+      const backwards = !act && mode === 'back';
+      const targetYaw = sideways ? p.rot + Math.max(-1.45, Math.min(1.45, phi)) : p.rot;
       if (initYaw) { yaw = targetYaw; initYaw = false; }
-      yaw += wrapPi(targetYaw - yaw) * (1 - Math.exp(-16 * dt));
+      const dy = wrapPi(targetYaw - yaw);
+      const maxStep = 7 * dt; // rad/s
+      yaw = wrapPi(yaw + Math.max(-maxStep, Math.min(maxStep, dy * (1 - Math.exp(-14 * dt)))));
       body.rotation.y = yaw + (f & F.SPIN ? p.anim * Math.PI * 2 : 0);
       const twist = Math.max(-1.35, Math.min(1.35, wrapPi(p.rot - yaw))); // quanto o tronco precisa girar para continuar olhando para o jogo
 
@@ -350,7 +364,7 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
         if (speed < 2.4) { want = 'Walk_Loop'; ts = Math.max(0.5, speed / 1.45); }
         else if (speed < 4.9) { want = 'Jog_Fwd_Loop'; ts = speed / 3.7; }
         else { want = 'Sprint_Loop'; ts = speed / 6.0; }
-        if (sideways && Math.abs(phi) > 2.2) ts *= 0.85; // de costas é mais lento
+        if (backwards) ts = -Math.abs(ts) * 0.85; // de ré: o clipe roda ao contrário, sem virar o corpo
       }
       if (fallT > 0 && !fallen) { fallT -= dt; if (fallT <= 0.2) fade = 0.35; }
       play(want, fade, ts);
