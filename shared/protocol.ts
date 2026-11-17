@@ -4,6 +4,7 @@ export type ClientMsg =
   | { t: 'create'; name: string }
   | { t: 'join'; code: string; name: string }
   | { t: 'rejoin'; code: string; token: string }
+  | { t: 'start' }
   | { t: 'pick'; ids: number[] }
   | { t: 'ready'; ready: boolean }
   | { t: 'input'; f: InputFrame }
@@ -30,6 +31,8 @@ export interface RoomView {
   winner?: number;
   wo?: boolean;
   rematch?: boolean[];
+  notice?: string; // aviso para ambos (ex.: faltam atletas cadastrados)
+  roster?: number; // atletas ativos cadastrados
 }
 
 export type ServerMsg =

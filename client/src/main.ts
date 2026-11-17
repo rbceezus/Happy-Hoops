@@ -110,18 +110,26 @@ function start() {
     showAero(true);
     const me = r.players[r.seat];
     const other = r.players[1 - r.seat];
+    const host = r.seat === 0;
+    const both = !!other;
     app.innerHTML = `
       <div class="screen"><div class="card stack">
-        <h2>Sala criada</h2>
-        <p class="sub">Passe este código para o adversário entrar:</p>
+        <h2>Sala ${host ? 'criada' : 'encontrada'}</h2>
+        <p class="sub">${host ? 'Passe este código para o adversário entrar:' : 'Você entrou! Aguarde o anfitrião iniciar a partida.'}</p>
         <div class="code" id="codebox">${r.code}</div>
-        <button id="copy">Copiar código</button>
-        <div class="row"><span>${esc(me?.name ?? '')} <span class="pill ok">você</span></span>
-          <span style="text-align:right">${other ? esc(other.name) : '<span class="pill warn">aguardando adversário…</span>'}</span></div>
+        <button class="ghost" id="copy">Copiar código</button>
+        <div class="lobby-players">
+          <div class="lp"><span class="dot o"></span><b>${esc(r.players[0]?.name ?? '—')}</b><span class="pill ok">anfitrião${r.seat === 0 ? ' · você' : ''}</span></div>
+          <div class="lp"><span class="dot b"></span><b>${r.players[1] ? esc(r.players[1].name) : 'Aguardando adversário…'}</b>${r.players[1] ? `<span class="pill ok">${r.seat === 1 ? 'você' : 'conectado'}</span>` : '<span class="pill warn">vazio</span>'}</div>
+        </div>
+        ${host ? `<button class="pri" id="start" ${both && other?.connected ? '' : 'disabled'}>${both ? 'Começar partida' : 'Aguardando o adversário…'}</button>` : '<div class="sub" style="text-align:center">Esperando o anfitrião clicar em “Começar partida”…</div>'}
+        ${r.notice ? `<div class="notice">${esc(r.notice)}</div>` : ''}
         <div class="err" data-err></div>
         <button class="ghost" id="leave">Sair da sala</button>
       </div></div>`;
+    void me;
     document.getElementById('copy')!.onclick = async () => { try { await navigator.clipboard.writeText(r.code); (document.getElementById('copy') as HTMLElement).textContent = 'Copiado!'; } catch { /* ok */ } };
+    document.getElementById('start')?.addEventListener('click', () => net.send({ t: 'start' }));
     document.getElementById('leave')!.onclick = () => net.send({ t: 'leave' });
   }
 

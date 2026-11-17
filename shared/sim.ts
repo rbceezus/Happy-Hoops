@@ -376,7 +376,8 @@ export class Game {
     if (Math.hypot(a.vx, a.vz) > S.movingSpeed) chance *= S.movingPenalty;
     if (a.stamina < BAL.move.tooTired) chance *= 1 - 0.15 * (1 - a.stamina / BAL.move.tooTired);
     chance = clamp(chance, 0.02, grade === 'green' ? S.maxChance : 0.9);
-    const made = this.rng.next() < chance;
+    // timing perfeito (verde) sempre cai de chuá; só um toco impede
+    const made = grade === 'green' ? true : this.rng.next() < chance;
 
     this.launchShot(a, made, grade, err, zone);
   }
@@ -436,7 +437,7 @@ export class Game {
       tx += dirx * mag; tz += dirz * mag;
     }
     const dh = Math.hypot(tx - sx, tz - sz);
-    const apex = HOOP.y + 1.15 + 0.045 * dh;
+    const apex = HOOP.y + 1.5 + 0.09 * dh; // arco alto: entrada íngreme, passa limpo pelo aro
     const ya = Math.max(apex, sy + 0.5);
     const g = BAL.gravity;
     const vy0 = Math.sqrt(2 * g * (ya - sy));
@@ -777,6 +778,7 @@ export class Game {
   private ballPhysics(dt: number) {
     const b = this.ball;
     const prevY = b.y;
+    const vy0 = b.vy;
     b.vy -= BAL.gravity * dt;
     // ímã suave para arremessos que "devem" entrar
     if (b.st === 'shot' && b.made && !b.scored && b.vy < 0) {
@@ -787,7 +789,7 @@ export class Game {
         b.vx *= 1 - 3 * dt; b.vz *= 1 - 3 * dt;
       }
     }
-    b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+    b.x += b.vx * dt; b.y += ((vy0 + b.vy) / 2) * dt; b.z += b.vz * dt;
 
     // aro (anel)
     if (b.st === 'shot' || b.st === 'loose') {

@@ -82,6 +82,10 @@ describe('lobby e partida', () => {
     const created = await a.waitFor((m) => m.t === 'room');
     expect(created.code).toMatch(/^[A-HJ-NP-Z2-9]{5}$/);
     b.send({ t: 'join', code: created.code, name: 'Beto' });
+    await a.waitFor((m) => m.t === 'room' && m.players[1]);
+    b.send({ t: 'start' });
+    expect((await b.waitFor((m) => m.t === 'err')).msg).toMatch(/anfitrião/); // convidado não inicia
+    a.send({ t: 'start' });
     const pa = await a.waitFor((m) => m.t === 'room' && m.phase === 'pick');
     const pb = await b.waitFor((m) => m.t === 'room' && m.phase === 'pick');
     expect(pa.options.length).toBe(5);

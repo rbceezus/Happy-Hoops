@@ -8,7 +8,7 @@
 > - **Sons:** sintetizados com WebAudio (chuá, aro, tabela, toco, ankle breaker, quique, apito, buzina) — não depende de arquivos externos.
 > - **Limpar a bola:** o arremesso fica **bloqueado** (aparece "LIMPE A BOLA") até o jogador estar fora do arco, em vez de anular a cesta depois.
 > - **Quadra:** jogadores não saem das linhas (a regra de bola fora vale só para a bola solta).
-> - **Verde do medidor:** aproxima a chance de 98% conforme o atributo (68% a 96% sem contestação), em vez de multiplicar por 1,35.
+> - **Verde do medidor:** timing perfeito sempre cai de chuá (só um toco impede), em qualquer zona e com qualquer atributo; o atributo define o tamanho da janela verde.
 > - **Escolha:** cada jogador recebe 5 atletas sorteados e escolhe 2; o mesmo aluno pode estar nos dois times.
 > - **Treino:** modo contra o computador (bot), que roda a mesma simulação no navegador.
 > - **Câmera:** estilo gameplay de meia quadra do NBA 2K (seção 6), com os valores em `client/src/game-view.ts` (`CAM`).

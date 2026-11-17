@@ -19,7 +19,7 @@ export class Bot {
     const ang = g.rng.range(-1.1, 1.1);
     const r = g.rng.next() < 0.55 ? g.rng.range(3.0, 5.2) : g.rng.range(6.9, 7.6);
     this.spot = { x: Math.sin(ang) * r, z: Math.max(0.8, Math.cos(ang) * r) };
-    this.shotErr = g.rng.range(-1, 1) * (110 - 85 * this.skill);
+    this.shotErr = g.rng.range(-1, 1) * (300 - 200 * this.skill);
   }
 
   frame(g: Game): InputFrame {

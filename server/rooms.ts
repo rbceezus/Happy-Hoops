@@ -59,6 +59,7 @@ export class Room {
   deadline = 0;
   lastActive = Date.now();
   paused = false;
+  notice = '';
   winner = -1;
   wo = false;
   teams: [AthleteInfo[], AthleteInfo[]] | null = null;
@@ -78,7 +79,6 @@ export class Room {
     };
     this.seats[idx] = seat;
     this.lastActive = Date.now();
-    if (this.seats[0] && this.seats[1] && this.phase === 'waiting') this.startPick();
     return seat;
   }
 
@@ -90,8 +90,12 @@ export class Room {
     const pool = listAthletes(true);
     if (pool.length < 2) {
       this.phase = 'waiting';
-      return 'Cadastre pelo menos 2 atletas ativos no painel admin.';
+      this.notice = pool.length === 0
+        ? 'Nenhum atleta cadastrado ainda. O criador precisa cadastrar atletas em /admin (mínimo 2, ideal 5 ou mais).'
+        : 'Só há 1 atleta ativo. Cadastre pelo menos 2 em /admin (ideal 5 ou mais).';
+      return this.notice;
     }
+    this.notice = '';
     this.phase = 'pick';
     this.game = null; this.teams = null; this.winner = -1; this.wo = false; this.paused = false;
     for (const s of this.seats) {
@@ -260,6 +264,7 @@ export class Room {
       deadline: this.phase === 'waiting' || this.phase === 'playing' || this.phase === 'over' ? (this.paused ? this.deadline : 0) : this.deadline,
       paused: this.paused, winner: this.phase === 'over' ? this.winner : undefined, wo: this.wo,
       rematch: this.seats.map((x) => !!x?.rematch),
+      notice: this.notice || undefined, roster: this.phase === 'waiting' ? listAthletes(true).length : undefined,
     };
   }
 
@@ -308,10 +313,7 @@ export class RoomManager {
         const seat = room.addSeat(ws, String(msg.name ?? ''));
         if (!seat) return this.err(ws, 'Sala cheia.');
         this.byWs.set(ws, room);
-        if (room.phase === 'waiting' && room.seats[0] && room.seats[1]) {
-          const e = room.startPick();
-          if (e) this.err(ws, e);
-        }
+        room.notice = '';
         room.broadcastRoom();
         return;
       }
@@ -332,6 +334,15 @@ export class RoomManager {
     const seat = room.seats[i]!;
     room.lastActive = Date.now();
     switch (msg.t) {
+      case 'start': {
+        if (room.phase !== 'waiting') break;
+        if (i !== 0) { this.err(ws, 'Só o anfitrião pode iniciar a partida.'); break; }
+        if (!room.seats[0] || !room.seats[1]) { this.err(ws, 'Aguarde o adversário entrar.'); break; }
+        if (!room.seats[1].ws) { this.err(ws, 'O adversário está desconectado.'); break; }
+        room.startPick();
+        room.broadcastRoom();
+        break;
+      }
       case 'pick': if (Array.isArray(msg.ids)) { room.pick(seat, msg.ids.map(Number)); room.broadcastRoom(); } break;
       case 'ready': room.setReady(seat, !!msg.ready); room.broadcastRoom(); break;
       case 'input': { const f = sanitizeInput(msg.f); if (f) room.input(i, f); break; }

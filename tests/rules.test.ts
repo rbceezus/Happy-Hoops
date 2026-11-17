@@ -161,4 +161,26 @@ describe('regras', () => {
     }
     expect(got).toBeGreaterThan(15);
   });
+
+  it('timing perfeito (verde) sempre cai de chuá, de qualquer zona', () => {
+    const spots: [number, number][] = [[0, 0.7], [1.5, 1.2], [-2, 3], [4, 4.5], [-4.5, 5.5], [0, 8], [-5, 7], [6.9, 0.6], [-6.9, 1.0], [3, 9.5]];
+    let n = 0;
+    for (let seed = 1; seed <= 12; seed++) for (const [x, z] of spots) {
+      // atleta fraco de propósito: o verde precisa valer mesmo assim
+      const g = new Game(teams([mk({ arremesso3: 25, arremessoMedia: 25, finishing: 25 }, 0), mk({}, 1)]), { seed, firstPoss: 0 });
+      g.setInput(0, { ...idle, ev: [{ k: 'check' }] }); g.step();
+      for (const d of g.teamAth(1)) { d.x = -7; d.z = 11; }
+      const h = g.controlled(0);
+      h.x = x; h.z = z; h.vx = h.vz = 0;
+      const evs = hold(g, 550);
+      evs.push(...run(g, 4, (q) => q.phase === 'score'));
+      const shot = evs.find((e) => e.e === 'shot');
+      expect(shot?.m, `seed ${seed} (${x},${z})`).toBe('green');
+      expect(g.phase, `seed ${seed} (${x},${z}) deveria pontuar`).toBe('score');
+      expect(evs.some((e) => e.e === 'swish' && e.v === 1), `chuá limpo em (${x},${z}) seed ${seed}`).toBe(true);
+      expect(evs.some((e) => e.e === 'rim' || e.e === 'board')).toBe(false);
+      n++;
+    }
+    expect(n).toBe(120);
+  });
 });

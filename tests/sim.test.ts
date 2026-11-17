@@ -42,6 +42,6 @@ describe('simulação', () => {
     }
     console.log({ shots, made, pct: (made / shots).toFixed(2), blocks, reb, viol });
     expect(made / shots).toBeGreaterThan(0.15);
-    expect(made / shots).toBeLessThan(0.75);
+    expect(made / shots).toBeLessThan(0.85);
   });
 });
