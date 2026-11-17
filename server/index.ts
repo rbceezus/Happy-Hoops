@@ -1,5 +1,6 @@
 // Servidor HTTP + WebSocket: API do admin, API pública de treino, salas do jogo e arquivos estáticos do cliente.
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -9,10 +10,16 @@ import { checkLogin, initAuth, isAdmin, makeSession, setSessionCookie } from './
 import { createAthlete, dbInfo, deleteAthlete, initDb, listAthletes, parseAthlete, updateAthlete } from './db';
 import { RoomManager } from './rooms';
 
+// `neon deploy`/`neon env pull` gravam DATABASE_URL em .env.local (ou .env); carrega se existir
+for (const f of ['.env.local', '.env']) { try { process.loadEnvFile(f); } catch { /* arquivo ausente */ } }
+
 const PORT = Number(process.env.PORT ?? 3000);
 const DIST = resolve(process.env.CLIENT_DIST ?? 'dist');
 
-await initDb();
+try { await initDb(); } catch (e) {
+  console.error(`\nERRO ao conectar no banco: ${(e as Error).message}\nConfira a variável DATABASE_URL (use a connection string do Neon, com ?sslmode=require).\n`);
+  process.exit(1);
+}
 await initAuth();
 console.log(`Banco: ${dbInfo().describe}`);
 if (dbInfo().kind === 'sqlite' && process.env.RENDER && !process.env.DB_PATH?.startsWith('/app/data')) {
@@ -26,7 +33,7 @@ if (process.env.SEED_DEMO === '1' && listAthletes().length === 0) {
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.map': 'application/json',
-  '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.woff2': 'font/woff2',
+  '.glb': 'model/gltf-binary', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.woff2': 'font/woff2',
 };
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -57,7 +64,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string) {
     return json(res, 415, { error: 'Content-Type deve ser application/json' });
   }
   try {
-    if (path === '/api/health') return json(res, 200, { ok: true });
+    if (path === '/api/health') return json(res, 200, { ok: true, db: dbInfo().kind });
 
     // ---- público ----
     if (path === '/api/draw' && method === 'GET') {
@@ -123,6 +130,8 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string) {
   }
 }
 
+const gzCache = new Map<string, Buffer>();
+
 function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string) {
   let file = normalize(join(DIST, decodeURIComponent(pathname)));
   if (!file.startsWith(DIST)) { res.writeHead(403); res.end(); return; }
@@ -133,8 +142,19 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string
     return;
   }
   const ext = extname(file);
-  const cache = file.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
-  res.writeHead(200, { 'Content-Type': MIME[ext] ?? 'application/octet-stream', 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff' });
+  const cache = file.includes('/assets/') ? 'public, max-age=31536000, immutable' : ext === '.glb' ? 'public, max-age=86400' : 'no-cache';
+  const headers: Record<string, string | number> = { 'Content-Type': MIME[ext] ?? 'application/octet-stream', 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff', Vary: 'Accept-Encoding' };
+  // gzip (com cache em memória) para js/css/html/glb
+  if (['.js', '.css', '.html', '.glb', '.svg', '.json'].includes(ext) && String(req.headers['accept-encoding'] ?? '').includes('gzip')) {
+    const st = statSync(file);
+    const key = `${file}:${st.mtimeMs}:${st.size}`;
+    let gz = gzCache.get(key);
+    if (!gz) { gz = gzipSync(readFileSync(file), { level: 9 }); gzCache.set(key, gz); }
+    res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip', 'Content-Length': gz.length });
+    res.end(gz);
+    return;
+  }
+  res.writeHead(200, headers);
   createReadStream(file).pipe(res);
 }
 

@@ -1,23 +1,19 @@
-# Blueprint do Render: um serviço só (site + API + WebSocket) com disco persistente para o SQLite.
+# Blueprint do Render: um serviço só (site + API + WebSocket). Os atletas ficam no Postgres (Neon), então não precisa de disco.
 services:
   - type: web
     name: happy-hoops
     runtime: docker
-    plan: starter          # disco persistente exige plano pago; o free dorme e perde salas/dados
-    region: oregon         # troque para a região mais perto dos jogadores (ex.: ohio, virginia)
+    plan: starter          # o plano free dorme e derruba as salas ao vivo
+    region: oregon         # troque para a região mais perto dos jogadores
     healthCheckPath: /api/health
     numInstances: 1        # as salas ficam na memória: nunca use mais de 1 instância
     autoDeploy: true
     envVars:
+      - key: DATABASE_URL  # connection string do Neon (cole no painel do Render)
+        sync: false
       - key: ADMIN_PASSWORD
-        sync: false        # você digita no painel do Render (senha forte)
+        sync: false        # senha forte do /admin
       - key: SESSION_SECRET
         generateValue: true
       - key: TRUST_PROXY
         value: "1"
-      - key: DB_PATH
-        value: /app/data/happy-hoops.db
-    disk:
-      name: happy-hoops-data
-      mountPath: /app/data
-      sizeGB: 1

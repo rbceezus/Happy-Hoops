@@ -12,6 +12,7 @@ import { GameView } from './game-view';
 import { Net } from './net';
 import { TrainingSession, drawFour } from './offline';
 import { Hero3D, portrait } from './preview';
+import { loadRig } from './rigged';
 import { DEMO_ATHLETES } from '../../shared/demo';
 import { nrm } from '../../shared/court';
 
@@ -45,11 +46,11 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const getName = () => { try { return localStorage.getItem('hh_name') ?? ''; } catch { return ''; } };
 const setName = (n: string) => { try { localStorage.setItem('hh_name', n); } catch { /* ok */ } };
 
-if (location.pathname.startsWith('/admin')) {
-  initAdmin(app);
-} else {
-  start();
-}
+// carrega o modelo com esqueleto (pmndrs/ecctrl) antes das telas; se falhar, usa o boneco simples
+void loadRig().finally(() => {
+  if (location.pathname.startsWith('/admin')) initAdmin(app);
+  else start();
+});
 
 function start() {
   const net = new Net();

@@ -52,6 +52,9 @@ Desenvolvimento com recarga automática: `npm run dev:server` e, em outro termin
 
 Regras: sem faltas nem roubos; defesa só contesta e dá toco. Depois de rebote defensivo é preciso **levar a bola para fora do arco** antes de arremessar. A posse fica com quem fez a cesta. Relógio de posse de 12 s.
 
+## Personagens
+Os atletas usam um modelo humano com esqueleto (do repositório [pmndrs/ecctrl](https://github.com/pmndrs/ecctrl), veja [CREDITS.md](CREDITS.md)): a camisa, a bermuda, os tênis, o rosto e o cabelo são presos aos ossos e coloridos por atleta; as animações (parado, andar, correr, sprint, agachado, pulo, queda) vêm de clipes com transição suave, e as ações de basquete (drible, arremesso, bandeja, enterrada, contestação) são sobrepostas aos ossos em `client/src/rigged.ts`. Se o `.glb` não carregar, o jogo usa automaticamente o boneco simples (`client/src/athlete.ts`).
+
 ## Estrutura
 
 ```
@@ -74,13 +77,20 @@ npm run typecheck
 
 O servidor entrega o cliente compilado **e** o WebSocket, então um único serviço com processo contínuo basta (Render, Fly.io, Railway…). A Vercel não mantém WebSocket aberto, então não serve para o servidor do jogo. Há um `Dockerfile` e um `render.yaml` prontos.
 
-### Atletas sumindo a cada deploy?
-Sem `DATABASE_URL`, o servidor usa SQLite num arquivo dentro do container, que é apagado a cada deploy (a não ser que exista um disco persistente). Solução: crie um banco PostgreSQL (no Render: **New → PostgreSQL**, plano free serve para testar; ou Neon/Supabase grátis), copie a **Internal Database URL** e coloque em `DATABASE_URL` no Web Service. O painel `/admin` mostra qual banco está em uso e tem **Exportar/Importar backup** (JSON).
+### Banco de dados (Neon / PostgreSQL)
+Com `DATABASE_URL`, os atletas ficam no Postgres e sobrevivem a qualquer deploy. A tabela é criada sozinha na primeira conexão. Sem `DATABASE_URL`, o servidor usa SQLite em arquivo (só para desenvolvimento local). O painel `/admin` mostra qual banco está em uso e tem **Exportar/Importar backup** (JSON).
 
-### Deploy no Render
-1. No Render: **New → Blueprint** e aponte para este repositório (branch `main`).
-2. Quando pedir, preencha `ADMIN_PASSWORD` com uma senha forte (o `SESSION_SECRET` é gerado sozinho).
-3. Confirme o plano **Starter** (o disco persistente de 1 GB em `/app/data` guarda os atletas) e a região mais perto dos jogadores.
-4. Depois do deploy, abra `https://SEU-APP.onrender.com/admin`, entre com a senha e cadastre os atletas (mínimo 5 para as escolhas do lobby).
+### Deploy no Render (com Neon)
+1. No Neon: abra o projeto → **Connect** → copie a connection string do branch `production` (a **pooled**, com `-pooler`, e `sslmode=require`).
+2. No Render: **New → Web Service** → repositório, branch `main`, runtime **Docker**, plano **Starter**, 1 instância, Health Check `/api/health`.
+3. Em **Environment**, crie:
+   | Variável | Valor |
+   |---|---|
+   | `DATABASE_URL` | a connection string do Neon |
+   | `ADMIN_PASSWORD` | uma senha forte |
+   | `SESSION_SECRET` | um texto longo e aleatório |
+   | `TRUST_PROXY` | `1` |
+4. Não precisa de disco nem de `DB_PATH`. Deixe `SEED_DEMO` desligado.
+5. Depois do deploy, `https://SEU-APP.onrender.com/api/health` deve responder `{"ok":true,"db":"postgres"}`. Se responder `"db":"sqlite"`, o `DATABASE_URL` não chegou. Entre em `/admin` e cadastre os atletas (mínimo 5).
 
-Mantenha **1 instância** (as salas ficam na memória) e não use o plano gratuito: ele dorme e não tem disco.
+Mantenha **1 instância** (as salas ficam na memória) e evite o plano gratuito: ele dorme e derruba as partidas.

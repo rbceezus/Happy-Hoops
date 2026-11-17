@@ -55,6 +55,8 @@ export class Preview3D {
   private lastX = 0;
   private yaw = 0.5;
   private auto = true;
+  /** estado de pose controlável (depuração e testes) */
+  poseState = { speed: 0, flags: 0, shotT: -1, anim: 0, y: 0, vf: 0, vl: 0, defending: false };
 
   constructor(private canvas: HTMLCanvasElement) {
     this.r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -65,6 +67,7 @@ export class Preview3D {
     this.scene.add(floor);
     this.cam.position.set(0, 1.35, 4.4);
     this.cam.lookAt(0, 0.95, 0);
+    (window as unknown as { __pv?: Preview3D }).__pv = this;
     canvas.addEventListener('pointerdown', (e) => { this.drag = true; this.auto = false; this.lastX = e.clientX; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener('pointerup', () => { this.drag = false; });
     canvas.addEventListener('pointermove', (e) => { if (this.drag) { this.yaw += (e.clientX - this.lastX) * 0.012; this.lastX = e.clientX; } });
@@ -79,7 +82,7 @@ export class Preview3D {
       if (this.auto) this.yaw += 0.012;
       if (this.model) {
         this.model.root.rotation.y = this.yaw;
-        this.model.pose({ speed: 0, flags: 0, shotT: -1, anim: 0, y: 0, rot: 0, dt: 0.016, t: this.t });
+        this.model.pose({ ...this.poseState, rot: 0, dt: 0.016, t: this.t });
       }
       this.r.render(this.scene, this.cam);
     };
@@ -157,7 +160,7 @@ export class Hero3D {
       if (this.model) {
         this.model.pose({ speed: 0, flags, shotT: -1, anim, y: 0, rot: this.yaw, dt, t: this.t, vf: 0, vl: 0, defending: false });
         const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), sx = Math.cos(this.yaw), sz = -Math.sin(this.yaw);
-        const side = flags & F.CROSS ? 0.3 * Math.cos(anim * Math.PI) : 0.3;
+        const side = flags & F.CROSS ? -0.3 * Math.cos(anim * Math.PI) : -0.3;
         this.ball.position.set(fx * 0.36 + sx * side, 0.13 + Math.abs(Math.sin(this.t * Math.PI * 3.2)) * 0.82 * this.scale, fz * 0.36 + sz * side);
         this.ball.rotation.x += dt * 6;
       }
