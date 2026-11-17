@@ -15,7 +15,10 @@ for (const f of ['.env.local', '.env']) { try { process.loadEnvFile(f); } catch 
 const PORT = Number(process.env.PORT ?? 3000);
 const DIST = resolve(process.env.CLIENT_DIST ?? 'dist');
 
-await initDb();
+try { await initDb(); } catch (e) {
+  console.error(`\nERRO ao conectar no banco: ${(e as Error).message}\nConfira a variável DATABASE_URL (use a connection string do Neon, com ?sslmode=require).\n`);
+  process.exit(1);
+}
 await initAuth();
 console.log(`Banco: ${dbInfo().describe}`);
 if (dbInfo().kind === 'sqlite' && process.env.RENDER && !process.env.DB_PATH?.startsWith('/app/data')) {
@@ -60,7 +63,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string) {
     return json(res, 415, { error: 'Content-Type deve ser application/json' });
   }
   try {
-    if (path === '/api/health') return json(res, 200, { ok: true });
+    if (path === '/api/health') return json(res, 200, { ok: true, db: dbInfo().kind });
 
     // ---- público ----
     if (path === '/api/draw' && method === 'GET') {
