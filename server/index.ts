@@ -6,15 +6,20 @@ import { WebSocketServer } from 'ws';
 import { DEMO_ATHLETES } from '../shared/demo';
 import type { ClientMsg } from '../shared/protocol';
 import { checkLogin, initAuth, isAdmin, makeSession, setSessionCookie } from './auth';
-import { createAthlete, deleteAthlete, listAthletes, parseAthlete, updateAthlete } from './db';
+import { createAthlete, dbInfo, deleteAthlete, initDb, listAthletes, parseAthlete, updateAthlete } from './db';
 import { RoomManager } from './rooms';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const DIST = resolve(process.env.CLIENT_DIST ?? 'dist');
 
-initAuth();
+await initDb();
+await initAuth();
+console.log(`Banco: ${dbInfo().describe}`);
+if (dbInfo().kind === 'sqlite' && process.env.RENDER && !process.env.DB_PATH?.startsWith('/app/data')) {
+  console.warn('ATENÇÃO: SQLite fora de disco persistente — os atletas somem a cada deploy. Configure DATABASE_URL (Postgres) ou um disco em /app/data.');
+}
 if (process.env.SEED_DEMO === '1' && listAthletes().length === 0) {
-  for (const a of DEMO_ATHLETES) { const { id: _id, ...rest } = a; createAthlete(rest); }
+  for (const a of DEMO_ATHLETES) { const { id: _id, ...rest } = a; await createAthlete(rest); }
   console.log(`Seed: ${DEMO_ATHLETES.length} atletas de demonstração criados.`);
 }
 
@@ -75,21 +80,42 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string) {
     }
     if (path.startsWith('/api/admin/')) {
       if (!isAdmin(req)) return json(res, 401, { error: 'Não autorizado' });
-      if (path === '/api/admin/me') return json(res, 200, { ok: true });
+      if (path === '/api/admin/me') return json(res, 200, { ok: true, db: dbInfo() });
+      if (path === '/api/admin/export' && method === 'GET') {
+        res.setHeader('Content-Disposition', `attachment; filename="happy-hoops-atletas-${new Date().toISOString().slice(0, 10)}.json"`);
+        return json(res, 200, { versao: 1, exportadoEm: new Date().toISOString(), atletas: listAthletes().map(({ id: _id, ...a }) => a) });
+      }
+      if (path === '/api/admin/import' && method === 'POST') {
+        const body = (await readBody(req, 2 * 1024 * 1024)) as { atletas?: unknown[]; substituir?: boolean };
+        const list = Array.isArray(body.atletas) ? body.atletas : Array.isArray(body) ? (body as unknown[]) : null;
+        if (!list) return json(res, 400, { error: 'Arquivo inválido: esperado { atletas: [...] }' });
+        const parsed = list.map(parseAthlete);
+        const bad = parsed.findIndex((p) => typeof p === 'string');
+        if (bad >= 0) return json(res, 400, { error: `Atleta ${bad + 1}: ${parsed[bad]}` });
+        if (body.substituir) for (const a of listAthletes()) await deleteAthlete(a.id);
+        const existing = new Set(listAthletes().map((a) => `${a.nome.toLowerCase()}|${a.sala.toLowerCase()}`));
+        let added = 0, skipped = 0;
+        for (const p of parsed as Exclude<ReturnType<typeof parseAthlete>, string>[]) {
+          const key = `${p.nome.toLowerCase()}|${p.sala.toLowerCase()}`;
+          if (existing.has(key)) { skipped++; continue; }
+          await createAthlete(p); existing.add(key); added++;
+        }
+        return json(res, 200, { ok: true, adicionados: added, ignorados: skipped });
+      }
       if (path === '/api/admin/athletes' && method === 'GET') return json(res, 200, listAthletes());
       if (path === '/api/admin/athletes' && method === 'POST') {
         const a = parseAthlete(await readBody(req));
         if (typeof a === 'string') return json(res, 400, { error: a });
-        return json(res, 201, createAthlete(a));
+        return json(res, 201, await createAthlete(a));
       }
       const m = path.match(/^\/api\/admin\/athletes\/(\d+)$/);
       if (m && method === 'PUT') {
         const a = parseAthlete(await readBody(req));
         if (typeof a === 'string') return json(res, 400, { error: a });
-        const r = updateAthlete(Number(m[1]), a);
+        const r = await updateAthlete(Number(m[1]), a);
         return r ? json(res, 200, r) : json(res, 404, { error: 'Atleta não encontrado' });
       }
-      if (m && method === 'DELETE') return deleteAthlete(Number(m[1])) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'Atleta não encontrado' });
+      if (m && method === 'DELETE') return (await deleteAthlete(Number(m[1]))) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'Atleta não encontrado' });
     }
     return json(res, 404, { error: 'Rota não encontrada' });
   } catch (e) {

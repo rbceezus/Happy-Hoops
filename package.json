@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Basquete de meia quadra 2v2 online para navegador",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
@@ -14,11 +16,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "pg": "^8.23.1",
     "three": "^0.170.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.23.1",
     "@types/three": "^0.170.0",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.0",
