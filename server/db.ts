@@ -86,7 +86,7 @@ function pgSsl(url: string): false | { rejectUnauthorized: false } {
 
 async function pgDriver(url: string): Promise<Driver> {
   const { default: pg } = await import('pg');
-  const clean = (() => { try { const u = new URL(url); u.searchParams.delete('sslmode'); return u.toString(); } catch { return url; } })();
+  const clean = (() => { try { const u = new URL(url); u.searchParams.delete('sslmode'); u.searchParams.delete('channel_binding'); return u.toString(); } catch { return url; } })();
   const pool = new pg.Pool({ connectionString: clean, ssl: pgSsl(url), max: 5 });
   const q = (c: string) => `"${c}"`;
   const host = (() => { try { return new URL(url).hostname; } catch { return '?'; } })();

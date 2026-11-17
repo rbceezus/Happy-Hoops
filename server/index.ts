@@ -9,6 +9,9 @@ import { checkLogin, initAuth, isAdmin, makeSession, setSessionCookie } from './
 import { createAthlete, dbInfo, deleteAthlete, initDb, listAthletes, parseAthlete, updateAthlete } from './db';
 import { RoomManager } from './rooms';
 
+// `neon deploy`/`neon env pull` gravam DATABASE_URL em .env.local (ou .env); carrega se existir
+for (const f of ['.env.local', '.env']) { try { process.loadEnvFile(f); } catch { /* arquivo ausente */ } }
+
 const PORT = Number(process.env.PORT ?? 3000);
 const DIST = resolve(process.env.CLIENT_DIST ?? 'dist');
 
