@@ -22,7 +22,8 @@ export function contestLevel(sx: number, sz: number, defs: Contester[]): number 
     const fd = clamp(1 - Math.max(0, dd - 0.7) / (S.contestRange - 0.7), 0, 1);
     const dl = dd || 1;
     const front = (hx / hl) * ((d.x - sx) / dl) + (hz / hl) * ((d.z - sz) / dl) > 0.2 ? 1 : S.behindFactor;
-    const hand = d.airborne ? 1.15 : d.contesting ? 1 : S.handsDownFactor;
+    // pulando > mão alta (botão) > perto (automático) > longe
+    const hand = d.airborne ? 1.2 : d.contesting ? 1.12 : dd <= S.autoRange ? 1 : S.handsDownFactor;
     const skill = S.defBase + (1 - S.defBase) * clamp((d.def - 25) / 74, 0, 1);
     free *= 1 - clamp(S.contestMax * skill * fd * front * hand, 0, 0.95);
   }

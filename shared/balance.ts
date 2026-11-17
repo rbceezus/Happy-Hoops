@@ -8,11 +8,11 @@ export const BAL = {
   gravity: 9.81,
 
   move: {
-    walk: 3.3,
-    run: 5.7,
-    accel: 24,
+    walk: 4.1,
+    run: 6.8,
+    accel: 34,
     staminaMax: 100,
-    runDrain: 22,
+    runDrain: 18,
     regen: 14,
     regenWalk: 24,
     runMinStamina: 18,
@@ -25,10 +25,10 @@ export const BAL = {
     idealMs: 550, // instante perfeito do medidor
     maxHoldMs: 950, // solta sozinho
     jumpApex: 0.45,
-    green: { base: 40, perAttr: 60 }, // ms: ±(base + perAttr*n)
-    goodMult: 2.2,
-    badMult: 4.5,
-    zoneWindow: { finishing: 1.7, media: 1.0, tres: 0.85 } as Record<string, number>,
+    green: { base: 20, perAttr: 36 }, // ms: ±(base + perAttr*n) — janela verde bem estreita
+    goodMult: 2.6,
+    badMult: 5,
+    zoneWindow: { finishing: 1.45, media: 1.0, tres: 0.85 } as Record<string, number>,
     greenPull: { base: 0.6, perAttr: 0.35 }, // quanto aproxima de 98%
     maxChance: 0.98,
     goodMult2: 1.0,
@@ -41,25 +41,26 @@ export const BAL = {
     } as Record<string, [number, number]>,
     movingPenalty: 0.85,
     movingSpeed: 3.0,
-    contestMax: 0.85,
-    contestRange: 3.4,
-    handsDownFactor: 0.55,
-    behindFactor: 0.55,
-    defBase: 0.45, // contestação mínima mesmo com defesa baixa
-    greenShrink: 0.65, // contestação encolhe a janela verde (perfeito continua entrando, mas fica mais difícil)
+    contestMax: 0.95,
+    contestRange: 3.6,
+    autoRange: 2.3, // só de estar perto já contesta (mão alta automática)
+    handsDownFactor: 0.5,
+    behindFactor: 0.6,
+    defBase: 0.6, // contestação mínima mesmo com defesa baixa
+    greenShrink: 0.8, // contestação encolhe a janela verde (perfeito continua entrando, mas fica mais difícil)
     finishingRange: 2.5,
     cooldown: 0.0,
   },
 
   block: {
-    base: 0.12,
-    perAttr: 0.6,
-    shooterPenalty: 0.12,
-    range: 1.7,
+    base: 0.22,
+    perAttr: 0.65,
+    shooterPenalty: 0.08,
+    range: 2.1,
     jumpApexT: 0.39,
-    timingWindow: 0.42,
-    threeMult: 0.5,
-    maxChance: 0.9,
+    timingWindow: 0.52,
+    threeMult: 0.6,
+    maxChance: 0.93,
   },
 
   jump: { vy: 3.8 },
@@ -101,20 +102,31 @@ export const BAL = {
   },
 
   defense: {
-    speedBase: 1.0,
+    speedBase: 1.03,
     speedPer: 0.15, // defesa aumenta velocidade em até +15%
     gap: 0.9,
+    aiGap: 1.3,
   },
 
   dunk: {
-    range: 4.2, // distância máxima da cesta para iniciar a enterrada
+    range: 4.6, // distância máxima da cesta para iniciar a enterrada
     T: 0.68, // duração total (s)
     apex: 1.05, // altura do pulo (m)
     releaseU: 0.62, // momento em que a bola é enterrada (fração de T)
-    base: 0.5, perFin: 0.45, contest: 0.55, minChance: 0.12, maxChance: 0.97,
+    base: 0.5, perFin: 0.45, contest: 0.6, minChance: 0.12, maxChance: 0.97,
+    // timing: segure X e solte quando o atleta chega no aro
+    maxHoldMs: 900,
+    green: { base: 26, perAttr: 40 },
+    goodChance: 1.0, badChance: 0.45, awfulChance: 0.12,
     heightBonus: { P: -0.15, M: 0, G: 0.1 } as Record<string, number>,
     blockMult: 0.75,
     targetZ: 0.5,
+  },
+
+  layup: {
+    drift: 2.4, // velocidade (m/s) em direção à cesta durante a bandeja
+    minDist: 0.95,
+    apex: 0.62, // pulo mais alto que o arremesso
   },
 
   height: { P: 0.93, M: 1.0, G: 1.07 } as Record<string, number>,

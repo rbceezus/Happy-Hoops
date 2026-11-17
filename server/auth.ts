@@ -21,18 +21,18 @@ function verifyPassword(pw: string, stored: string): boolean {
 let passwordHash = '';
 let secret = '';
 
-export function initAuth() {
-  secret = process.env.SESSION_SECRET || getMeta('session_secret') || '';
-  if (!secret) { secret = randomBytes(32).toString('hex'); setMeta('session_secret', secret); }
+export async function initAuth() {
+  secret = process.env.SESSION_SECRET || (await getMeta('session_secret')) || '';
+  if (!secret) { secret = randomBytes(32).toString('hex'); await setMeta('session_secret', secret); }
   if (process.env.ADMIN_PASSWORD_HASH) passwordHash = process.env.ADMIN_PASSWORD_HASH;
   else if (process.env.ADMIN_PASSWORD) passwordHash = hashPassword(process.env.ADMIN_PASSWORD);
   else {
-    const saved = getMeta('admin_hash');
+    const saved = await getMeta('admin_hash');
     if (saved) passwordHash = saved;
     else {
       const pw = randomBytes(9).toString('base64url');
       passwordHash = hashPassword(pw);
-      setMeta('admin_hash', passwordHash);
+      await setMeta('admin_hash', passwordHash);
       console.log('\n==================================================');
       console.log(' Senha do admin gerada (aparece só desta vez):');
       console.log(`   ${pw}`);

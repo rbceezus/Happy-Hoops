@@ -1,6 +1,6 @@
 // Painel do criador: login, lista de atletas, edição (overall manual, atributos, pele, cabelo, sala) com pré-visualização 3D.
 import { ATTR_KEYS, ATTR_LABELS, AthleteInfo, HAIR_LABELS, HAIR_STYLES } from '../../shared/types';
-import { Preview3D } from './preview';
+import { Preview3D, portrait } from './preview';
 
 const SKINS = ['#ffe0c7', '#f1c9a5', '#e0ac82', '#c68b62', '#a96f4a', '#8d5a3c', '#6b4128', '#3f2615'];
 const HAIRS = ['#000000', '#1a120d', '#2b1b12', '#5a3220', '#a05a1c', '#d8a94a', '#b0151f', '#7a7a7a', '#f5f5f5'];
@@ -45,6 +45,9 @@ export function initAdmin(app: HTMLElement) {
   }
 
   async function panel() {
+    const me = await api('/api/admin/me');
+    const dbKind: string = me.db?.kind ?? 'sqlite';
+    const dbDesc: string = me.db?.describe ?? '';
     let list: AthleteInfo[] = await api('/api/admin/athletes');
     let cur: ReturnType<typeof blank> = blank();
     let msg = '';
@@ -59,6 +62,11 @@ export function initAdmin(app: HTMLElement) {
               <div class="li ${a.id === cur.id ? 'sel' : ''} ${a.ativo ? '' : 'off'}" data-id="${a.id}">
                 <span class="n">${a.numero}</span><div><div>${esc(a.nome)}</div><div class="pill">${esc(a.sala)}</div></div><span class="o">${a.overall}</span>
               </div>`).join('') || '<p class="sub">Nenhum atleta ainda. Clique em “Novo”.</p>'}</div>
+            <div class="dbinfo ${dbKind === 'sqlite' ? 'warn' : ''}">${dbKind === 'postgres'
+              ? `Banco: ${esc(dbDesc)} — os atletas ficam salvos entre deploys.`
+              : `Banco: ${esc(dbDesc)}. Se estiver hospedado sem disco persistente, os atletas somem a cada deploy: configure <b>DATABASE_URL</b> (Postgres). Faça backup!`}</div>
+            <div class="row" style="margin-top:10px"><a class="btnlink" href="/api/admin/export" download>Exportar backup</a>
+              <label class="btnlink" style="margin:0;text-transform:none;letter-spacing:0">Importar backup<input type="file" id="imp" accept="application/json,.json" hidden></label></div>
             <div class="foot"><a href="/">← Jogo</a> · <a href="#" id="out">Sair</a></div>
           </div>
 
@@ -79,8 +87,8 @@ export function initAdmin(app: HTMLElement) {
             <label>Cor da pele</label>
             <div class="row" style="gap:6px"><div class="swatches" id="skins">${SKINS.map((c) => `<div class="sw ${c === cur.corPele ? 'on' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}</div><input type="color" id="pele" value="${cur.corPele}" style="flex:0 0 60px"></div>
             <div class="grid2">
-              <div><label>Estilo de cabelo</label><select id="estilo">${HAIR_STYLES.map((h) => `<option value="${h}" ${cur.estiloCabelo === h ? 'selected' : ''}>${HAIR_LABELS[h]}</option>`).join('')}</select></div>
-              <div><label>Cor do cabelo</label><div class="row" style="gap:6px"><input type="color" id="cabelo" value="${cur.corCabelo}" style="flex:0 0 60px"><div class="swatches" id="hairs">${HAIRS.map((c) => `<div class="sw ${c === cur.corCabelo ? 'on' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}</div></div></div>
+              <div style="grid-column:1 / -1"><label>Cabelo</label><div class="hairgrid" id="hairgrid"></div></div>
+              <div style="grid-column:1 / -1"><label>Cor do cabelo</label><div class="row" style="gap:6px"><input type="color" id="cabelo" value="${cur.corCabelo}" style="flex:0 0 60px"><div class="swatches" id="hairs">${HAIRS.map((c) => `<div class="sw ${c === cur.corCabelo ? 'on' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}</div></div></div>
             </div>
             <label class="check"><input type="checkbox" id="ativo" ${cur.ativo ? 'checked' : ''}> Ativo (aparece nas escolhas do jogo)</label>
             <div class="row" style="margin-top:16px">
@@ -101,7 +109,6 @@ export function initAdmin(app: HTMLElement) {
       cur.sala = q<HTMLInputElement>('sala').value; cur.numero = Number(q<HTMLInputElement>('numero').value);
       cur.altura = q<HTMLSelectElement>('altura').value as AthleteInfo['altura'];
       cur.overall = Number(q<HTMLInputElement>('overall').value);
-      cur.estiloCabelo = q<HTMLSelectElement>('estilo').value as AthleteInfo['estiloCabelo'];
       cur.corPele = q<HTMLInputElement>('pele').value; cur.corCabelo = q<HTMLInputElement>('cabelo').value;
       cur.ativo = q<HTMLInputElement>('ativo').checked;
       document.querySelectorAll<HTMLInputElement>('[data-attr]').forEach((el) => {
@@ -110,7 +117,23 @@ export function initAdmin(app: HTMLElement) {
       });
       q('o_overall').textContent = String(cur.overall);
     };
-    const updatePreview = () => preview?.set({ ...(cur as AthleteInfo), id: cur.id ?? 0 });
+    const updatePreview = () => { preview?.set({ ...(cur as AthleteInfo), id: cur.id ?? 0 }); drawHairs(); };
+    let hairTimer = 0;
+    const drawHairs = () => {
+      window.clearTimeout(hairTimer);
+      hairTimer = window.setTimeout(() => {
+        const grid = document.getElementById('hairgrid');
+        if (!grid) return;
+        grid.innerHTML = HAIR_STYLES.map((h) => `
+          <button type="button" class="hairtile ${cur.estiloCabelo === h ? 'on' : ''}" data-h="${h}" title="${HAIR_LABELS[h]}">
+            <img src="${portrait({ ...(cur as AthleteInfo), id: 0, estiloCabelo: h }, 0xe8631a, 140, 'head')}" alt="">
+            <span>${HAIR_LABELS[h]}</span>
+          </button>`).join('');
+        grid.querySelectorAll<HTMLElement>('.hairtile').forEach((el) => {
+          el.onclick = () => { cur.estiloCabelo = el.dataset.h as AthleteInfo['estiloCabelo']; updatePreview(); };
+        });
+      }, 60);
+    };
 
     function bind() {
       preview = new Preview3D(q<HTMLCanvasElement>('pv'));
@@ -119,6 +142,17 @@ export function initAdmin(app: HTMLElement) {
         el.onclick = () => { cur = structuredClone(list.find((a) => a.id === Number(el.dataset.id))!); msg = ''; render(); };
       });
       q('new').onclick = () => { cur = blank(); msg = ''; render(); };
+      q<HTMLInputElement>('imp').onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        try {
+          const data = JSON.parse(await file.text());
+          const r = await api('/api/admin/import', 'POST', data);
+          list = await api('/api/admin/athletes');
+          msg = `✓ Backup importado: ${r.adicionados} novos, ${r.ignorados} já existiam.`;
+          render();
+        } catch (err) { alert(`Não foi possível importar: ${(err as Error).message}`); }
+      };
       q('out').onclick = async (e) => { e.preventDefault(); await api('/api/admin/logout', 'POST', {}); login(); };
       const onChange = () => { sync(); updatePreview(); };
       app.querySelectorAll('input, select').forEach((el) => { el.addEventListener('input', onChange); el.addEventListener('change', onChange); });

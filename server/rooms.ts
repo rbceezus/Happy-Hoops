@@ -26,7 +26,7 @@ interface Seat {
   msgCount: number;
 }
 
-const EV_KINDS = new Set(['shootDown', 'shootUp', 'pass', 'cross', 'spin', 'switch', 'select', 'dunk', 'check']);
+const EV_KINDS = new Set(['shootDown', 'shootUp', 'pass', 'cross', 'spin', 'switch', 'select', 'dunk', 'dunkUp', 'check']);
 
 export function sanitizeInput(raw: unknown): InputFrame | null {
   const f = raw as Partial<InputFrame> | null;
@@ -36,7 +36,7 @@ export function sanitizeInput(raw: unknown): InputFrame | null {
   if (Array.isArray(f.ev)) {
     for (const e of f.ev.slice(0, 8) as InputEvent[]) {
       if (!e || typeof e !== 'object' || !EV_KINDS.has((e as { k: string }).k)) continue;
-      if (e.k === 'shootUp') out.ev.push({ k: 'shootUp', hold: Math.max(0, Math.min(2000, Number(e.hold) || 0)) });
+      if (e.k === 'shootUp' || e.k === 'dunkUp') out.ev.push({ k: e.k, hold: Math.max(0, Math.min(2000, Number(e.hold) || 0)) });
       else if (e.k === 'pass') out.ev.push({ k: 'pass', kind: e.kind === 'bounce' ? 'bounce' : 'chest' });
       else if (e.k === 'select') out.ev.push({ k: 'select', slot: e.slot === 1 ? 1 : 0 });
       else if (e.k === 'cross') out.ev.push({ k: 'cross', dir: e.dir < 0 ? -1 : 1 });

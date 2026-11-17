@@ -85,7 +85,7 @@ export function buildAthlete(info: AthleteInfo, teamColor: number, opts: { label
 
   const skin = new THREE.MeshStandardMaterial({ color: info.corPele, roughness: 0.48, metalness: 0 });
   const skinDark = mat(shade(info.corPele, 0.84), 0.55);
-  const lips = mat(new THREE.Color(info.corPele).lerp(new THREE.Color('#a8403c'), 0.5).getHex(), 0.45);
+  const lips = mat(new THREE.Color(info.corPele).lerp(new THREE.Color('#9a4a44'), 0.32).getHex(), 0.45);
   const jersey = new THREE.MeshStandardMaterial({ color: teamColor, roughness: 0.62, metalness: 0 });
   const trim = mat(0xffffff, 0.5);
   const shortsMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(teamColor).multiplyScalar(0.6).getHex(), roughness: 0.65, side: THREE.DoubleSide });
@@ -150,25 +150,24 @@ export function buildAthlete(info: AthleteInfo, teamColor: number, opts: { label
   ell(sph(1), skin, 0.03, 0.018, 0.03, -0.055, -0.045, 0.075, head); // bochechas
   ell(sph(1), skin, 0.03, 0.018, 0.03, 0.055, -0.045, 0.075, head);
   for (const sx of [-1, 1]) ell(sph(1), skinDark, 0.016, 0.03, 0.02, 0.095 * sx, -0.005, 0, head); // orelhas
-  ell(sph(1), skinDark, 0.017, 0.022, 0.02, 0, -0.022, 0.107, head); // nariz
-  ell(sph(1), skin, 0.012, 0.03, 0.014, 0, 0.0, 0.103, head); // ponte do nariz
+  ell(sph(1), skinDark, 0.013, 0.016, 0.014, 0, -0.024, 0.102, head); // nariz
+  ell(sph(1), skin, 0.009, 0.026, 0.01, 0, 0.0, 0.1, head); // ponte do nariz
   const eyeW = mat(0xffffff, 0.25), iris = mat(0x3a2418, 0.2), brow = mat(info.corCabelo === '#f5f5f5' ? 0x777777 : info.corCabelo, 0.8);
   for (const sx of [-1, 1]) {
-    ell(sph(1), eyeW, 0.02, 0.013, 0.008, 0.038 * sx, 0.02, 0.095, head);
-    ell(sph(1), iris, 0.0105, 0.0105, 0.008, 0.038 * sx, 0.02, 0.1, head);
-    const b = mesh(new THREE.BoxGeometry(0.046, 0.008, 0.01), brow, 0.038 * sx, 0.048, 0.096, head);
+    ell(sph(1), eyeW, 0.019, 0.012, 0.008, 0.036 * sx, 0.018, 0.094, head);
+    ell(sph(1), iris, 0.009, 0.009, 0.008, 0.036 * sx, 0.018, 0.099, head);
+    const b = mesh(new THREE.BoxGeometry(0.04, 0.0055, 0.008), brow, 0.037 * sx, 0.044, 0.096, head);
     b.rotation.z = -0.1 * sx; b.castShadow = false;
   }
-  mesh(new THREE.BoxGeometry(0.04, 0.007, 0.008), lips, 0, -0.058, 0.1, head).castShadow = false;
-  mesh(new THREE.BoxGeometry(0.03, 0.005, 0.008), lips, 0, -0.068, 0.097, head).castShadow = false;
+  ell(sph(1), lips, 0.021, 0.0065, 0.008, 0, -0.06, 0.094, head).castShadow = false;
   addHair(head, info);
 
   // ================= braços =================
   const mkArm = (side: number) => {
     const sh = new THREE.Group();
-    sh.position.set(0.215 * side, 0.285, 0);
+    sh.position.set(0.195 * side, 0.28, 0);
     chest.add(sh);
-    mesh(sph(0.064), skin, 0, 0, 0, sh); // deltoide
+    ell(sph(1), skin, 0.058, 0.064, 0.056, 0.008 * side, -0.01, 0, sh); // deltoide
     mesh(lathe([[0.049, 0.02], [0.054, -0.06], [0.047, -0.17], [0.04, -0.29]]), skin, 0, 0, 0, sh);
     const el = new THREE.Group();
     el.position.y = -0.29;
@@ -183,7 +182,7 @@ export function buildAthlete(info: AthleteInfo, teamColor: number, opts: { label
     const th = mesh(new THREE.CapsuleGeometry(0.011, 0.04, 4, 8), skin, 0.032 * side, -0.02, 0.012, hand);
     th.rotation.z = 0.5 * side;
     for (let i = 0; i < 4; i++) ell(sph(1), skin, 0.007, 0.03, 0.01, (-0.021 + i * 0.014), -0.085 + Math.abs(i - 1.5) * -0.004, 0.0, hand);
-    return { sh, el };
+    return { sh, el, hand };
   };
   const armL = mkArm(1), armR = mkArm(-1); // L = +x
 
@@ -301,7 +300,7 @@ export function buildAthlete(info: AthleteInfo, teamColor: number, opts: { label
       const breathe = Math.sin(idleT * 2.2) * 0.012;
       let hipY = 0.995, lean = 0.04 + breathe, spineZ = 0, spineY = 0, chestY = 0, headX = 0, headY = 0;
       let thLx = 0, thRx = 0, thLz = 0.04, thRz = -0.04, knL = 0.06, knR = 0.06, anL = 0, anR = 0;
-      let shLx = 0.06, shRx = 0.06, shLz = 0.13, shRz = -0.13, elL = -0.22, elR = -0.22;
+      let shLx = 0.06, shRx = 0.06, shLz = 0.13, shRz = -0.13, elL = -0.22, elR = -0.22, wrR = 0, wrL = 0;
 
       // ---- postura por papel
       let crouch = 0;
@@ -354,17 +353,32 @@ export function buildAthlete(info: AthleteInfo, teamColor: number, opts: { label
         shRx = -3.1; elR = -0.05; shRz = -0.12; shLx = -0.7; shLz = 1.0; elL = -0.3; lean = 0.2; crouch += 0.02;
       }
 
-      // ---- arremesso: preparação (agacha) -> extensão -> follow-through
-      if (shoot) {
+      // ---- arremesso / bandeja
+      if (shoot && (f & F.LAYUP)) {
+        // bandeja: passada com o joelho de impulsão alto, braço estendido até o aro, outro braço protege
         const t = Math.max(0, p.shotT);
-        const load = ease(seg(t, 0, 0.2)), rise = ease(seg(t, 0.2, 0.55)), follow = ease(seg(t, 0.55, 0.85));
-        crouch = 0.14 * load * (1 - rise); lean = 0.1 - 0.12 * rise;
-        knL = knR = 0.95 * load * (1 - rise) + 0.1; thLx = thRx = -0.55 * load * (1 - rise); thLz = 0.08; thRz = -0.08;
-        anL = anR = 0.6 * rise; // ponta dos pés
-        shRx = lerp3(-0.9, -1.05, -3.0, load, rise); elR = lerp3(-1.7, -1.9, -0.12, load, rise) + follow * -0.45; shRz = -0.12;
-        shRx += follow * 0.35;
-        shLx = lerp3(-0.8, -1.05, -2.35, load, rise); elL = lerp3(-1.3, -1.5, -0.55, load, rise); shLz = 0.3 + rise * 0.15;
-        headX = -0.1 - 0.25 * rise; spineY = -0.1 * load; chestY = 0.15 * load;
+        const gather = ease(seg(t, 0, 0.16)), rise = ease(seg(t, 0.12, 0.55));
+        crouch = 0.1 * gather * (1 - rise); lean = 0.18 - 0.08 * rise;
+        thRx = -1.45 * rise - 0.3 * gather * (1 - rise); knR = 1.7 * rise + 0.5 * gather * (1 - rise); anR = 0.4 * rise;
+        thLx = 0.35 * rise - 0.2 * gather * (1 - rise); knL = 0.15 + 0.5 * gather * (1 - rise); anL = 0.7 * rise;
+        thLz = 0.06; thRz = -0.06;
+        shRx = -0.9 - 2.2 * rise; elR = -1.5 + 1.4 * rise; shRz = -0.08; wrR = rise * 0.5 + (f & F.REL ? 0.7 : 0);
+        shLx = -1.0 - 0.4 * rise; shLz = 0.75; elL = -0.85;
+        headX = -0.15 - 0.35 * rise; spineY = 0.12 * rise; chestY = -0.1 * rise;
+      } else if (shoot) {
+        // arremesso: agacha (carga) -> sobe com a bola acima da testa -> estende o braço -> follow-through com o punho dobrado
+        const t = Math.max(0, p.shotT);
+        const load = ease(seg(t, 0, 0.2)), rise = ease(seg(t, 0.2, 0.55));
+        const rel = !!(f & F.REL);
+        const follow = rel ? 1 : ease(seg(t, 0.55, 0.75));
+        crouch = 0.15 * load * (1 - rise); lean = 0.1 - 0.13 * rise;
+        knL = knR = 0.95 * load * (1 - rise) + 0.08; thLx = thRx = -0.55 * load * (1 - rise); thLz = 0.09; thRz = -0.09;
+        anL = anR = 0.65 * rise; // ponta dos pés
+        // ponto de arremesso: bola acima da testa, cotovelo embaixo da bola
+        shRx = lerp3(-0.95, -2.35, -2.95, load, rise); elR = lerp3(-1.6, -1.95, -0.15, load, rise); shRz = -0.1;
+        wrR = lerp3(-0.2, -0.9, -0.6, load, rise) + follow * 1.9; // punho engatilhado -> "pescoço de cisne"
+        shLx = lerp3(-0.85, -2.2, -2.45, load, rise); elL = lerp3(-1.3, -1.55, -0.95, load, rise); shLz = 0.32 + rise * 0.1; wrL = -0.4;
+        headX = -0.1 - 0.28 * rise; spineY = -0.1 * load; chestY = 0.15 * load;
       }
 
       // ---- enterrada
@@ -410,6 +424,7 @@ export function buildAthlete(info: AthleteInfo, teamColor: number, opts: { label
       legL.an.rotation.x = sm('aL', anL - 0.4 * (knL - 0.1), r, dt) * 0.5; legR.an.rotation.x = sm('aR', anR - 0.4 * (knR - 0.1), r, dt) * 0.5;
       armL.sh.rotation.set(sm('sLx', shLx, r, dt), 0, sm('sLz', shLz, r, dt)); armR.sh.rotation.set(sm('sRx', shRx, r, dt), 0, sm('sRz', shRz, r, dt));
       armL.el.rotation.x = sm('eL', elL, r, dt); armR.el.rotation.x = sm('eR', elR, r, dt);
+      armL.hand.rotation.x = sm('wL', wrL, r, dt); armR.hand.rotation.x = sm('wR', wrR, r, dt);
 
       // ---- corpo todo: giro (spin), queda, inclinação em curvas
       body.rotation.y = p.rot + (f & F.SPIN ? p.anim * Math.PI * 2 : 0);
@@ -437,47 +452,130 @@ function lerp3(a: number, b: number, c: number, t1: number, t2: number) {
   return (a + (b - a) * t1) + (c - (a + (b - a) * t1)) * t2;
 }
 
+// ================= cabelos =================
+// Cada cabelo é uma malha moldada sobre a cabeça (elipsoide), com linha do cabelo suave,
+// volume por região e textura (cachos) por deslocamento. Fora da área do couro cabeludo,
+// os vértices afundam para dentro da cabeça e ficam invisíveis.
+const HEAD_R = new THREE.Vector3(0.093, 0.114, 0.104);
+const sstep = (a: number, b: number, x: number) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
+/** 0..1: quanto o ponto (direção unitária) está dentro do couro cabeludo. */
+function scalpMask(nx: number, ny: number, nz: number, front = 0.36) {
+  void nx;
+  const t = nz >= 0.55 ? front : nz >= -0.35 ? -0.05 + (front + 0.05) * ((nz + 0.35) / 0.9) : -0.6 + 0.55 * ((nz + 1) / 0.65);
+  return sstep(t - 0.05, t + 0.07, ny);
+}
+
+/** ruído barato (cachos) */
+const curl = (x: number, y: number, z: number, f: number) =>
+  Math.sin(x * f + 1.3) * Math.sin(y * f * 1.1 + 0.7) * Math.sin(z * f * 0.9 + 2.1);
+
+function hairShell(
+  shape: (n: THREE.Vector3, m: number) => THREE.Vector3 | null,
+  seg = 56,
+): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(1, seg, Math.round(seg * 0.75));
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    n.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+    const m = scalpMask(n.x, n.y, n.z);
+    const inside = new THREE.Vector3(n.x * HEAD_R.x, n.y * HEAD_R.y, n.z * HEAD_R.z).multiplyScalar(0.9);
+    const out = shape(n, m) ?? inside;
+    out.lerp(inside, 1 - m);
+    pos.setXYZ(i, out.x, out.y, out.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+/** ponto na superfície da cabeça deslocado para fora por `t` metros */
+const onHead = (n: THREE.Vector3, t: number) =>
+  new THREE.Vector3(n.x * HEAD_R.x, n.y * HEAD_R.y, n.z * HEAD_R.z).addScaledVector(n, t);
+
 function addHair(head: THREE.Group, info: AthleteInfo) {
-  const hair = new THREE.MeshStandardMaterial({ color: info.corCabelo, roughness: 0.7 });
-  const cap = (r: number, theta: number, tilt = -0.5, sy = 1.04, dz = -0.008) => {
-    const m = mesh(new THREE.SphereGeometry(r, 24, 16, 0, Math.PI * 2, 0, Math.PI * theta), hair, 0, 0.004, dz, head);
-    m.scale.set(1, sy, 1.02);
-    m.rotation.x = tilt;
-    return m;
+  const color = new THREE.Color(info.corCabelo);
+  const curly = ['black', 'cacheado', 'dreads'].includes(info.estiloCabelo);
+  const hair = new THREE.MeshStandardMaterial({ color, roughness: curly ? 0.95 : 0.55, metalness: 0 });
+  const add = (g: THREE.BufferGeometry, x = 0, y = 0, z = 0) => mesh(g, hair, x, y, z, head);
+  const strand = (r: number, len: number, x: number, y: number, z: number, rx = 0, rz = 0) => {
+    const c = add(new THREE.CapsuleGeometry(r, len, 4, 8), x, y - len / 2, z);
+    c.rotation.set(rx, 0, rz);
+    return c;
   };
+
   switch (info.estiloCabelo) {
     case 'careca': {
-      // sombra de barba/couro cabeludo bem leve
-      const m = mesh(new THREE.SphereGeometry(0.1, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), new THREE.MeshStandardMaterial({ color: info.corCabelo, transparent: true, opacity: 0.18, roughness: 1 }), 0, 0.01, -0.005, head);
-      m.scale.set(0.95, 1.12, 1.02); m.rotation.x = -0.5;
+      const m = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.16, roughness: 1, depthWrite: false });
+      mesh(hairShell((n) => onHead(n, 0.002)), m, 0, 0, 0, head);
       break;
     }
-    case 'curto': cap(0.108, 0.56); break;
+    case 'raspado':
+      add(hairShell((n) => onHead(n, 0.005 + 0.001 * curl(n.x, n.y, n.z, 60))));
+      break;
+    case 'curto':
+      add(hairShell((n) => onHead(n, 0.016 + 0.014 * Math.max(0, n.y) + 0.003 * curl(n.x, n.y, n.z, 40))));
+      break;
+    case 'cacheado':
+      add(hairShell((n) => onHead(n, 0.03 + 0.035 * Math.max(0, n.y) + 0.012 * Math.max(0, -n.z) + 0.009 * curl(n.x, n.y, n.z, 26))));
+      break;
     case 'black': {
-      const c = cap(0.18, 0.62, -0.55, 0.95, -0.03);
-      c.position.y = 0.03;
+      // volume redondo e grande em volta da cabeça, com textura crespa
+      const c = new THREE.Vector3(0, 0.045, -0.02);
+      add(hairShell((n, m) => {
+        const R = 0.175 + 0.02 * Math.max(0, n.y) + 0.012 * curl(n.x, n.y, n.z, 20) + 0.006 * curl(n.x, n.y, n.z, 47);
+        const big = c.clone().addScaledVector(n, R);
+        return onHead(n, 0.02).lerp(big, sstep(0.0, 0.85, m));
+      }, 64));
       break;
     }
     case 'tranca': {
-      cap(0.11, 0.58);
-      for (let i = 0; i < 13; i++) {
-        const a = (i / 12) * Math.PI * 1.6 + Math.PI * 0.7;
-        const x = Math.cos(a) * 0.098, z = Math.sin(a) * 0.092 - 0.012;
-        if (z > 0.03) continue;
-        const b = mesh(new THREE.CapsuleGeometry(0.011, 0.25, 3, 6), hair, x, -0.1, z - 0.012, head);
-        b.rotation.x = -0.05;
+      // tranças nagô (fileiras da testa até a nuca) + tranças soltas atrás
+      add(hairShell((n) => onHead(n, 0.007 + 0.012 * Math.pow(Math.max(0, Math.cos(n.x * Math.PI * 4.2)), 6))));
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI * (0.72 + (i / 8) * 0.56);
+        strand(0.0115, 0.26 - Math.abs(i - 4) * 0.012, Math.cos(a) * 0.075, -0.02, Math.sin(a) * 0.085 - 0.015, 0.12, Math.cos(a) * 0.15);
       }
       break;
     }
-    case 'moicano': {
-      cap(0.1, 0.5);
-      const r = mesh(new THREE.BoxGeometry(0.034, 0.08, 0.18), hair, 0, 0.115, -0.012, head);
-      r.rotation.x = -0.1;
+    case 'dreads': {
+      add(hairShell((n) => onHead(n, 0.02 + 0.01 * Math.max(0, n.y) + 0.005 * curl(n.x, n.y, n.z, 30))));
+      for (let i = 0; i < 18; i++) {
+        const a = Math.PI * (0.55 + (i / 17) * 0.9);
+        const r = 0.098, len = 0.2 + ((i * 37) % 7) * 0.012;
+        strand(0.016, len, Math.cos(a) * r, 0.02 - (i % 2) * 0.03, Math.sin(a) * r * 1.05 - 0.01, 0.15 + (i % 3) * 0.05, Math.cos(a) * 0.25);
+      }
       break;
     }
-    case 'coque': {
-      cap(0.11, 0.56);
-      mesh(new THREE.SphereGeometry(0.05, 14, 10), hair, 0, 0.12, -0.07, head);
+    case 'moicano':
+      add(hairShell((n) => {
+        const crest = sstep(0.24, 0.1, Math.abs(n.x)) * Math.max(0, n.y + 0.2);
+        return onHead(n, 0.004 + 0.07 * crest + 0.004 * curl(n.x, n.y, n.z, 50) * crest);
+      }));
+      break;
+    case 'coque':
+      add(hairShell((n) => onHead(n, 0.014 + 0.006 * Math.max(0, n.y))));
+      mesh(new THREE.SphereGeometry(0.052, 18, 14), hair, 0, 0.115, -0.07, head);
+      break;
+    case 'rabo': {
+      add(hairShell((n) => onHead(n, 0.013 + 0.004 * Math.max(0, n.y))));
+      mesh(new THREE.TorusGeometry(0.022, 0.008, 6, 14), mat(0x222222), 0, 0.03, -0.112, head);
+      const tail = strand(0.026, 0.2, 0, 0.03, -0.13, 0.35, 0);
+      tail.scale.set(1, 1, 0.8);
+      break;
+    }
+    case 'liso': {
+      add(hairShell((n) => onHead(n, 0.016 + 0.01 * Math.max(0, n.y))));
+      // cabelo caindo atrás até os ombros e mechas dos lados
+      const back = new THREE.Mesh(new THREE.CylinderGeometry(0.104, 0.125, 0.32, 24, 1, true, Math.PI * 0.55, Math.PI * 0.9),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.55, side: THREE.DoubleSide }));
+      back.position.set(0, -0.1, -0.012);
+      back.castShadow = true;
+      head.add(back);
+      for (const sx of [-1, 1]) {
+        const lock = mesh(new THREE.BoxGeometry(0.018, 0.2, 0.05), hair, 0.094 * sx, -0.06, 0.03, head);
+        lock.rotation.z = 0.05 * sx;
+      }
       break;
     }
   }

@@ -6,13 +6,14 @@ export class Controls {
   private ev: InputEvent[] = [];
   private contestMouse = false;
   private spaceDown: number | null = null;
+  private xDown: number | null = null;
   private onFlush: (() => void) | null = null;
   /** time com a posse? (define o que o clique direito faz) */
   hasPossession: () => boolean = () => false;
   onMute: (() => void) | null = null;
   enabled = true;
   /** quando o espaço é pressionado/solto — para o medidor de arremesso */
-  onShoot: ((down: boolean, t0: number) => void) | null = null;
+  onShoot: ((down: boolean, t0: number, kind: 'shot' | 'dunk') => void) | null = null;
   private handlers: [string, EventListener][] = [];
 
   constructor(private target: HTMLElement) {
@@ -37,8 +38,9 @@ export class Controls {
   private push(e: InputEvent) { this.ev.push(e); this.onFlush?.(); }
 
   reset() {
-    if (this.spaceDown !== null) { this.onShoot?.(false, this.spaceDown); }
-    this.keys.clear(); this.contestMouse = false; this.spaceDown = null;
+    if (this.spaceDown !== null) { this.onShoot?.(false, this.spaceDown, 'shot'); }
+    if (this.xDown !== null) { this.push({ k: 'dunkUp', hold: performance.now() - this.xDown }); this.onShoot?.(false, this.xDown, 'dunk'); }
+    this.keys.clear(); this.contestMouse = false; this.spaceDown = null; this.xDown = null;
   }
 
   private keydown(e: KeyboardEvent) {
@@ -52,7 +54,7 @@ export class Controls {
     switch (k) {
       case 'Space': {
         this.spaceDown = performance.now();
-        this.onShoot?.(true, this.spaceDown);
+        this.onShoot?.(true, this.spaceDown, 'shot');
         this.push({ k: 'shootDown' });
         break;
       }
@@ -61,7 +63,7 @@ export class Controls {
       case 'KeyQ': this.push({ k: 'cross', dir: -1 }); break;
       case 'KeyE': this.push({ k: 'cross', dir: 1 }); break;
       case 'KeyR': this.push({ k: 'spin' }); break;
-      case 'KeyX': this.push({ k: 'dunk' }); break;
+      case 'KeyX': this.xDown = performance.now(); this.onShoot?.(true, this.xDown, 'dunk'); this.push({ k: 'dunk' }); break;
       case 'Tab': this.push({ k: 'switch' }); break;
       case 'Digit1': this.push({ k: 'select', slot: 0 }); break;
       case 'Digit2': this.push({ k: 'select', slot: 1 }); break;
@@ -74,9 +76,15 @@ export class Controls {
     this.keys.delete(e.code);
     if (e.code === 'Space' && this.spaceDown !== null) {
       const hold = performance.now() - this.spaceDown;
-      this.onShoot?.(false, this.spaceDown);
+      this.onShoot?.(false, this.spaceDown, 'shot');
       this.spaceDown = null;
       this.push({ k: 'shootUp', hold });
+    }
+    if (e.code === 'KeyX' && this.xDown !== null) {
+      const hold = performance.now() - this.xDown;
+      this.onShoot?.(false, this.xDown, 'dunk');
+      this.xDown = null;
+      this.push({ k: 'dunkUp', hold });
     }
   }
 

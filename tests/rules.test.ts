@@ -194,11 +194,29 @@ describe('regras', () => {
       const h = g.controlled(0);
       h.x = 1.5; h.z = 3.0;
       g.setInput(0, { ...idle, ev: [{ k: 'dunk' }] });
-      const evs = run(g, 2.5, (q) => q.phase === 'score');
+      const evs: GameEvent[] = [];
+      for (let i = 0; i < 150 && g.phase !== 'score'; i++) {
+        // solta o X no momento em que chega no aro (timing perfeito)
+        if (h.dunk && h.dunk.hold === null && h.dunk.e * 1000 >= BAL.dunk.T * BAL.dunk.releaseU * 1000) g.setInput(0, { ...idle, ev: [{ k: 'dunkUp', hold: h.dunk.e * 1000 }] });
+        g.step(); evs.push(...g.drainEvents());
+      }
       expect(evs.some((e) => e.e === 'dunk')).toBe(true);
       if (g.phase === 'score') { made++; expect(g.score[0]).toBe(1); expect(evs.some((e) => e.e === 'swish')).toBe(false); }
     }
-    expect(made).toBeGreaterThanOrEqual(17); // finishing alto + sem defesa quase sempre converte
+    expect(made).toBe(20); // timing perfeito + sem toco = sempre enterra
+
+    // sem soltar o X: fica pendurado e solta tarde demais -> quase sempre erra
+    let late = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const g = new Game(teams([mk({ finishing: 50 }, 0), mk({}, 1)]), { seed, firstPoss: 0 });
+      g.setInput(0, { ...idle, ev: [{ k: 'check' }] }); g.step();
+      for (const d of g.teamAth(1)) { d.x = -7; d.z = 11; }
+      const h = g.controlled(0); h.x = 1; h.z = 2.5;
+      g.setInput(0, { ...idle, ev: [{ k: 'dunk' }] });
+      run(g, 2.5, (q) => q.phase === 'score');
+      if (g.phase === 'score') late++;
+    }
+    expect(late).toBeLessThan(8);
 
     const far = live(2);
     far.controlled(0).x = 0; far.controlled(0).z = 8;
@@ -214,28 +232,30 @@ describe('regras', () => {
     expect(run(nc, 0.1).some((e) => e.e === 'violation' && e.m === 'LIMPE A BOLA')).toBe(true);
   });
 
-  it('defesa: contestação forte reduz bastante o acerto e encolhe a janela verde', () => {
+  it('defesa: só de estar perto (sem apertar C) já contesta e fecha o verde', () => {
     const rate = (defOn: boolean) => {
       let made = 0, n = 0;
       for (let seed = 1; seed <= 60; seed++) {
-        const g = new Game(teams([mk({ arremessoMedia: 80 }, 0), mk({}, 1)], [mk({ defesa: 70, bloqueio: 30 }, 2), mk({}, 3)]), { seed, firstPoss: 0 });
+        const g = new Game(teams([mk({ arremessoMedia: 80 }, 0), mk({}, 1)], [mk({ defesa: 60, bloqueio: 25 }, 2), mk({}, 3)]), { seed, firstPoss: 0 });
         g.setInput(0, { ...idle, ev: [{ k: 'check' }] }); g.step();
         const h = g.controlled(0); const d = g.teamAth(1)[h.slot]; const d2 = g.teamAth(1)[1 - h.slot];
         h.x = 0; h.z = 5; h.vx = h.vz = 0; d2.x = -7; d2.z = 11;
-        if (defOn) { d.x = 0; d.z = 4.0; d.contesting = true; } else { d.x = -7; d.z = 11; }
+        if (defOn) { d.x = 0; d.z = 3.9; } else { d.x = -7; d.z = 11; }
         d.vx = d.vz = 0;
         g.ctl[1] = d.slot;
-        // 80ms atrasado: fora do verde estreito mas dentro do verde aberto
+        // 25ms atrasado: verde quando livre, fora do verde quando marcado
         g.setInput(0, { ...idle, ev: [{ k: 'shootDown' }] });
-        for (let i = 0; i < 38; i++) { if (defOn) g.setInput(1, { ...idle, contest: true }); g.step(); }
-        g.setInput(0, { ...idle, ev: [{ k: 'shootUp', hold: 630 }] });
-        const evs = run(g, 5, (q) => q.phase === 'score' || (q.ball.st === 'held' && q.t > 0.5));
+        for (let i = 0; i < 34; i++) { d.vx = d.vz = 0; g.step(); }
+        g.setInput(0, { ...idle, ev: [{ k: 'shootUp', hold: 575 }] });
+        run(g, 5, (q) => q.phase === 'score' || (q.ball.st === 'held' && q.t > 0.5));
         n++; if (g.score[0] > 0) made++;
       }
       return made / n;
     };
     const open = rate(false), guarded = rate(true);
     console.log({ open, guarded });
-    expect(open - guarded).toBeGreaterThan(0.3);
+    expect(open).toBeGreaterThan(0.95);
+    expect(guarded).toBeLessThan(0.35);
   });
+
 });

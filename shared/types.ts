@@ -27,10 +27,11 @@ export const ATTR_LABELS: Record<keyof Attrs, string> = {
 };
 
 export type Altura = 'P' | 'M' | 'G';
-export type HairStyle = 'careca' | 'curto' | 'black' | 'tranca' | 'moicano' | 'coque';
-export const HAIR_STYLES: HairStyle[] = ['careca', 'curto', 'black', 'tranca', 'moicano', 'coque'];
+export type HairStyle = 'careca' | 'raspado' | 'curto' | 'cacheado' | 'black' | 'tranca' | 'dreads' | 'moicano' | 'coque' | 'rabo' | 'liso';
+export const HAIR_STYLES: HairStyle[] = ['careca', 'raspado', 'curto', 'cacheado', 'black', 'tranca', 'dreads', 'moicano', 'coque', 'rabo', 'liso'];
 export const HAIR_LABELS: Record<HairStyle, string> = {
-  careca: 'Careca', curto: 'Curto', black: 'Black power', tranca: 'Tranças', moicano: 'Moicano', coque: 'Coque',
+  careca: 'Careca', raspado: 'Raspado', curto: 'Curto', cacheado: 'Cacheado', black: 'Black power', tranca: 'Tranças',
+  dreads: 'Dreads', moicano: 'Moicano', coque: 'Coque', rabo: 'Rabo de cavalo', liso: 'Liso longo',
 };
 
 export interface AthleteInfo {
@@ -59,6 +60,7 @@ export type InputEvent =
   | { k: 'spin' }
   | { k: 'switch' }
   | { k: 'dunk' }
+  | { k: 'dunkUp'; hold: number }
   | { k: 'select'; slot: 0 | 1 }
   | { k: 'check' };
 
@@ -76,7 +78,7 @@ export const emptyInput = (): InputFrame => ({ mx: 0, mz: 0, run: false, contest
 export type Phase = 'check' | 'live' | 'score' | 'over';
 
 export const F = {
-  BALL: 1, SHOOT: 2, JUMP: 4, CONTEST: 8, FALLEN: 16, STUN: 32, RUN: 64, SPIN: 128, CROSS: 256, READY: 512, DUNK: 1024,
+  BALL: 1, SHOOT: 2, JUMP: 4, CONTEST: 8, FALLEN: 16, STUN: 32, RUN: 64, SPIN: 128, CROSS: 256, READY: 512, DUNK: 1024, REL: 2048, LAYUP: 4096,
 } as const;
 
 // [x, z, rot, y, flags, speed, shotT, animP, stamina]

@@ -21,8 +21,8 @@ export interface Ath {
   x: number; z: number; vx: number; vz: number; rot: number;
   y: number; vy: number; jumpT: number; // jumpT >= 0 => no ar (pulo livre)
   stamina: number; tired: boolean;
-  shot: { t: number; released: boolean } | null;
-  dunk: { t: number; T: number; sx: number; sz: number; done: boolean } | null;
+  shot: { t: number; released: boolean; layup: boolean } | null;
+  dunk: { t: number; T: number; sx: number; sz: number; done: boolean; e: number; hold: number | null } | null;
   shotLand: number; // tempo restante de aterrissagem após soltar
   contesting: boolean;
   dash: { t: number; T: number; dx: number; dz: number; speed: number; kind: 'cross' | 'spin' } | null;
@@ -223,7 +223,7 @@ export class Game {
             this.emit({ e: 'violation', m: 'LIMPE A BOLA', t: team, v: 0 });
             return;
           }
-          c.shot = { t: 0, released: false };
+          c.shot = { t: 0, released: false, layup: dist(c.x, c.z, HOOP.x, HOOP.z) <= BAL.shot.finishingRange };
           c.shotLand = 0;
         } else if (!c.shot && c.jumpT < 0 && c.y === 0) {
           this.startJump(c);
@@ -244,8 +244,16 @@ export class Game {
           this.emit({ e: 'violation', m: 'LONGE', t: team, v: 0 });
           return;
         }
-        c.dunk = { t: 0, T: BAL.dunk.T, sx: c.x, sz: c.z, done: false };
+        c.dunk = { t: 0, T: BAL.dunk.T, sx: c.x, sz: c.z, done: false, e: 0, hold: null };
         c.vx = c.vz = 0;
+        break;
+      }
+      case 'dunkUp': {
+        const dk = c.dunk;
+        if (dk && dk.hold === null && !dk.done) {
+          const serverMs = dk.e * 1000;
+          dk.hold = Math.abs(ev.hold - serverMs) <= 160 ? ev.hold : serverMs;
+        }
         break;
       }
       case 'pass': this.doPass(c, ev.kind); break;
@@ -401,7 +409,12 @@ export class Game {
   private stepDunk(a: Ath, dt: number) {
     const D = BAL.dunk;
     const dk = a.dunk!;
-    dk.t += dt;
+    dk.e += dt;
+    const relT = dk.T * D.releaseU;
+    if (!dk.done && dk.hold === null && dk.e * 1000 >= D.maxHoldMs) dk.hold = D.maxHoldMs; // soltou tarde demais
+    // sobe até o aro; lá espera o jogador soltar o X (fica pendurado) e só então finaliza
+    if (dk.done) dk.t += dt;
+    else if (dk.t < relT) dk.t = Math.min(relT, dk.t + dt);
     const u = dk.t / dk.T;
     const k0 = clamp((u - 0.08) / 0.62, 0, 1);
     const k = k0 * k0 * (3 - 2 * k0);
@@ -412,8 +425,8 @@ export class Game {
     a.y = Math.max(0, D.apex * a.scale * (1 - w * w));
     a.rot = Math.atan2(HOOP.x - a.x, HOOP.z - a.z);
     a.moving = true;
-    if (!dk.done && u >= D.releaseU) this.resolveDunk(a);
-    if (u >= 1) { a.dunk = null; a.y = 0; a.vx = a.vz = 0; a.speed = 0; }
+    if (!dk.done && dk.t >= relT && dk.hold !== null) this.resolveDunk(a);
+    if (a.dunk && dk.t >= dk.T) { a.dunk = null; a.y = 0; a.vx = a.vz = 0; a.speed = 0; }
   }
 
   private resolveDunk(a: Ath) {
@@ -433,7 +446,14 @@ export class Game {
       if (this.rng.next() < chance) { this.blockShot(a, d); a.dunk = null; return; }
     }
     const level = this.contestOn(a);
-    const chance = clamp(D.base + D.perFin * nFin + (D.heightBonus[a.info.altura] ?? 0) - D.contest * level, D.minChance, D.maxChance);
+    // timing: soltar o X quando chega no aro
+    const ideal = D.T * D.releaseU * 1000;
+    const err = (a.dunk!.hold ?? D.maxHoldMs) - ideal;
+    const g = (D.green.base + D.green.perAttr * nFin) * (1 - BAL.shot.greenShrink * level);
+    const ae = Math.abs(err);
+    const grade = ae <= g ? 'green' : ae <= g * BAL.shot.goodMult ? 'good' : ae <= g * BAL.shot.badMult ? 'bad' : 'awful';
+    const base = clamp(D.base + D.perFin * nFin + (D.heightBonus[a.info.altura] ?? 0) - D.contest * level, D.minChance, D.maxChance);
+    const chance = grade === 'green' ? 1 : grade === 'good' ? base * D.goodChance : grade === 'bad' ? base * D.badChance : base * D.awfulChance;
     const made = this.rng.next() < chance;
     b.shooter = a.id; b.shotTeam = a.team; b.lastTouch = a.team; b.holder = -1; b.scored = false; b.value = 1;
     this.clockRun = false;
@@ -441,13 +461,13 @@ export class Game {
     if (made) {
       b.st = 'shot'; b.made = true; b.touched = false; b.dunkShot = true; b.born = this.t;
       b.x = HOOP.x; b.y = HOOP.y + 0.4; b.z = HOOP.z; b.vx = b.vz = 0; b.vy = -7;
-      this.emit({ e: 'dunk', a: a.id, t: a.team, v: 1 });
+      this.emit({ e: 'dunk', a: a.id, t: a.team, v: 1, m: grade });
     } else {
       b.st = 'loose'; b.made = false; b.touched = true; b.dunkShot = false;
       b.x = HOOP.x; b.y = HOOP.y + 0.2; b.z = HOOP.z + 0.1;
       b.vx = this.rng.range(-2.2, 2.2); b.vz = this.rng.range(1.5, 3.2); b.vy = this.rng.range(2.5, 4.2);
       a.noGrabUntil = this.t + 0.4;
-      this.emit({ e: 'dunk', a: a.id, t: a.team, v: 0 });
+      this.emit({ e: 'dunk', a: a.id, t: a.team, v: 0, m: grade });
       this.emit({ e: 'rim', v: 1 });
       this.reb = null;
       this.autoSwitchToBall();
@@ -475,9 +495,11 @@ export class Game {
   private launchShot(a: Ath, made: boolean, grade: string, err: number, zone: string) {
     const b = this.ball;
     const rx = a.x, rz = a.z;
-    const sx = rx + Math.sin(a.rot) * 0.2;
-    const sz = rz + Math.cos(a.rot) * 0.2;
-    const sy = HAND_H * a.scale + a.y + 0.15;
+    const layup = !!a.shot?.layup;
+    const toH = norm2(HOOP.x - rx, HOOP.z - rz);
+    const sx = layup ? rx + toH.x * 0.32 : rx + Math.sin(a.rot) * 0.2;
+    const sz = layup ? rz + toH.z * 0.32 : rz + Math.cos(a.rot) * 0.2;
+    const sy = HAND_H * a.scale + a.y + (layup ? 0.42 : 0.15);
     let tx = HOOP.x, tz = HOOP.z;
     let touch = false;
     const away = norm2(sx - HOOP.x, sz - HOOP.z); // da cesta para o arremessador
@@ -509,8 +531,8 @@ export class Game {
       tx += dirx * mag; tz += dirz * mag;
     }
     const dh = Math.hypot(tx - sx, tz - sz);
-    const apex = HOOP.y + 1.5 + 0.09 * dh; // arco alto: entrada íngreme, passa limpo pelo aro
-    const ya = Math.max(apex, sy + 0.5);
+    const apex = layup ? HOOP.y + 0.6 + 0.12 * dh : HOOP.y + 1.5 + 0.09 * dh; // arco alto: entrada íngreme, passa limpo pelo aro
+    const ya = Math.max(apex, sy + (layup ? 0.3 : 0.5));
     const g = BAL.gravity;
     const vy0 = Math.sqrt(2 * g * (ya - sy));
     const t1 = vy0 / g;
@@ -597,6 +619,12 @@ export class Game {
         if (m > 0.05) { dx = inp.mx / m; dz = inp.mz / m; mag = Math.min(1, m); }
         run = inp.run;
         contest = inp.contest && !this.hasBall(a) && !this.isOffense(a);
+        // só de estar perto de quem arremessa/enterra o defensor já levanta a mão
+        if (!contest && !this.isOffense(a)) {
+          for (const q of this.teamAth(this.opp(a.team))) {
+            if (((q.shot && !q.shot.released) || (q.dunk && !q.dunk.done)) && dist(a.x, a.z, q.x, q.z) <= BAL.shot.autoRange) contest = true;
+          }
+        }
       } else if (live) {
         const ai = this.aiMove(a);
         dx = ai.dx; dz = ai.dz; mag = ai.mag; run = ai.run;
@@ -668,7 +696,16 @@ export class Game {
         const S = BAL.shot;
         const T = S.idealMs / 1000;
         const u = (a.shot.t - T) / T;
-        a.y = Math.max(0, S.jumpApex * (1 - u * u));
+        a.y = Math.max(0, (a.shot.layup ? BAL.layup.apex * a.scale : S.jumpApex) * (1 - u * u));
+        if (a.shot.layup && a.shot.t < T * 0.95) {
+          // bandeja: passada em direção à cesta enquanto sobe
+          const hx = HOOP.x - a.x, hz = HOOP.z - a.z, hd = Math.hypot(hx, hz);
+          if (hd > BAL.layup.minDist) {
+            const st = Math.min(BAL.layup.drift * dt, hd - BAL.layup.minDist);
+            a.x += (hx / hd) * st; a.z += (hz / hd) * st;
+            a.vx = (hx / hd) * BAL.layup.drift; a.vz = (hz / hd) * BAL.layup.drift;
+          }
+        }
         if (!a.shot.released && a.shot.t * 1000 >= S.maxHoldMs) this.release(a, S.maxHoldMs);
         if (a.shot && a.shot.t >= T * 2) { a.shot = null; a.y = 0; }
       }
@@ -752,7 +789,8 @@ export class Game {
     }
     // defesa: homem a homem
     const o = this.mark(a);
-    const gap = this.holder() === o ? BAL.defense.gap : 1.8;
+    // a IA marca um pouco mais solta que o jogador humano consegue marcar
+    const gap = this.holder() === o ? BAL.defense.aiGap : 1.8;
     const dh = norm2(HOOP.x - o.x, HOOP.z - o.z);
     const tx = o.x + dh.x * gap, tz = o.z + dh.z * gap;
     const mv = goTo(tx, tz, 0.25, true);
@@ -763,7 +801,7 @@ export class Game {
     if (osT >= 0 && dd < 2.8) {
       if (a.aiBlockAt < 0 && osT < 0.2) {
         a.aiContestRoll = this.rng.next() < 0.75;
-        const tryBlock = this.rng.next() < 0.35 + 0.5 * this.nr(a, 'bloqueio') && dd < 2.0;
+        const tryBlock = this.rng.next() < 0.18 + 0.35 * this.nr(a, 'bloqueio') && dd < 2.0;
         if (tryBlock) {
           const err = this.rng.range(-0.2, 0.2) * (1.2 - this.nr(a, 'defesa'));
           const lead = o.shot ? BAL.shot.idealMs / 1000 - BAL.block.jumpApexT : BAL.dunk.T * BAL.dunk.releaseU - BAL.block.jumpApexT;
@@ -1028,6 +1066,8 @@ export class Game {
       if (p.dash?.kind === 'cross') f |= F.CROSS;
       if (p.readyAt <= this.t) f |= F.READY;
       if (p.dunk) f |= F.DUNK;
+      if (p.shot?.released) f |= F.REL;
+      if (p.shot?.layup) f |= F.LAYUP;
       const anim = p.dash ? p.dash.t / p.dash.T : p.dunk ? p.dunk.t / p.dunk.T : 0;
       return [r3(p.x), r3(p.z), r3(p.rot), r3(p.y), f, r3(p.speed), p.shot ? r3(p.shot.t) : -1, r3(anim), Math.round(p.stamina)];
     });

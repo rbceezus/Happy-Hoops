@@ -1,12 +1,19 @@
 // Telas: início, lobby por código, escolha de 5 atletas (2 entram no time), jogo online e modo treino.
 import type { RoomView } from '../../shared/protocol';
 import { ATTR_KEYS, ATTR_LABELS, AthleteInfo, InputFrame, Snapshot } from '../../shared/types';
+import '@fontsource/barlow-condensed/600.css';
+import '@fontsource/barlow-condensed/700.css';
+import '@fontsource/barlow-condensed/800.css';
+import '@fontsource/barlow/500.css';
+import '@fontsource/barlow/600.css';
 import { initAudio } from './audio';
 import { initAdmin } from './admin';
 import { GameView } from './game-view';
 import { Net } from './net';
 import { TrainingSession, drawFour } from './offline';
-import { portrait } from './preview';
+import { Hero3D, portrait } from './preview';
+import { DEMO_ATHLETES } from '../../shared/demo';
+import { nrm } from '../../shared/court';
 
 const app = document.getElementById('app')!;
 
@@ -71,20 +78,55 @@ function start() {
   net.connect();
 
   // ------------------------------------------------------------------ início
+  let hero: Hero3D | null = null;
+  let heroTimer = 0;
+  const stopHero = () => { window.clearInterval(heroTimer); hero?.dispose(); hero = null; };
+
+  function ring(vals: [string, number, string][]) {
+    // anéis concêntricos (estilo "colorização" da referência) com 3 atributos
+    return `<svg viewBox="0 0 120 120" class="rings">${vals.map(([, v, c], i) => {
+      const r = 50 - i * 11, len = 2 * Math.PI * r, f = nrm(v) * 0.75 + 0.1;
+      return `<circle cx="60" cy="60" r="${r}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5"/>
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${len * f} ${len}" transform="rotate(-90 60 60)"/>`;
+    }).join('')}${vals.map(([lb, v], i) => `<text x="60" y="${52 + i * 12}" text-anchor="middle">${v} <tspan>${lb}</tspan></text>`).join('')}</svg>`;
+  }
+  function curve(a: AthleteInfo) {
+    const pts: [string, number][] = [['ARREMESSO 3', a.attrs.arremesso3], ['FINISHING', a.attrs.finishing], ['DRIBLE', a.attrs.drible], ['DEFESA', a.attrs.defesa]];
+    const xs = pts.map((_, i) => 36 + i * 60), ys = pts.map(([, v]) => 66 - nrm(v) * 52);
+    let d = `M${xs[0]},${ys[0]}`;
+    for (let i = 1; i < xs.length; i++) { const mx = (xs[i - 1] + xs[i]) / 2; d += ` C${mx},${ys[i - 1]} ${mx},${ys[i]} ${xs[i]},${ys[i]}`; }
+    return `<svg viewBox="0 0 250 92" class="curve"><path d="${d}" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="1.6"/>
+      ${pts.map(([lb, v], i) => `<text x="${xs[i]}" y="${ys[i] - 7}" text-anchor="middle" class="v">${v}</text><text x="${xs[i]}" y="88" text-anchor="middle">${lb}</text>`).join('')}</svg>`;
+  }
+
   function home() {
     stopGame();
-    showAero(true);
+    showAero(false);
     window.clearInterval(timer);
+    document.body.classList.add('dark');
     app.innerHTML = `
-      <div class="screen"><div class="card stack">
-        <div class="logo">${BALL_SVG}<div><h1><span class="g">Happy</span> <span class="o">Hoops</span></h1><div class="tag">2v2 · meia quadra · até 5</div></div></div>
-        <div><label>Seu apelido</label><input id="name" maxlength="16" placeholder="Como você quer ser chamado?" value="${esc(getName())}"></div>
-        <button class="pri" id="create">Criar sala</button>
-        <div class="row"><input id="code" maxlength="5" placeholder="CÓDIGO" style="text-transform:uppercase;letter-spacing:.2em;text-align:center;font-weight:800"><button id="join">Entrar</button></div>
-        <button class="ghost" id="train">Treino contra o computador</button>
-        <div class="err" data-err></div>
-        <div class="foot">Jogue com teclado e mouse · <a href="/admin">Admin</a></div>
-      </div></div>`;
+      <div class="screen dk home">
+        <div class="spot"></div>
+        <div class="wm">${BALL_SVG}</div>
+        <header class="hd-top">
+          <div class="brand">${BALL_SVG}<span>HAPPY</span><b class="gold">HOOPS</b></div>
+          <div class="hd-tag">2V2 · MEIA QUADRA · ATÉ 5</div>
+        </header>
+        <section class="hd-left">
+          <h1 class="hero-t">ENTRE<br>NA<br>QUADRA</h1>
+          <p class="quote">“Cada aluno é um atleta. Cada cesta conta.<br>Junte seu parceiro, chame o adversário e jogue até 5.”</p>
+          <div class="menu">
+            <div class="namebox"><label>Seu apelido</label><input id="name" maxlength="16" placeholder="Como você quer ser chamado?" value="${esc(getName())}"></div>
+            <button class="mi" id="create"><i>01</i>Criar sala</button>
+            <div class="mi-row"><i>02</i><input id="code" maxlength="5" placeholder="CÓDIGO"><button class="mi-go" id="join">Entrar</button></div>
+            <button class="mi" id="train"><i>03</i>Treino contra o computador</button>
+            <div class="err" data-err></div>
+          </div>
+        </section>
+        <section class="hd-right"><canvas id="hero"></canvas><div class="ringbox" id="ringbox"></div></section>
+        <footer class="hd-bottom" id="feat"></footer>
+        <div class="hints"><span><kbd>ENTER</kbd> Selecionar</span><span><kbd>ESC</kbd> Voltar</span><a href="/admin">Admin</a></div>
+      </div>`;
     const name = () => (document.getElementById('name') as HTMLInputElement).value.trim();
     document.getElementById('create')!.onclick = () => { initAudio(); setName(name()); net.send({ t: 'create', name: name() }); };
     document.getElementById('join')!.onclick = () => {
@@ -93,6 +135,33 @@ function start() {
     };
     (document.getElementById('code') as HTMLInputElement).onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('join')!.click(); };
     document.getElementById('train')!.onclick = () => { initAudio(); startTraining(); };
+
+    // atleta em destaque (gira entre os cadastrados)
+    stopHero();
+    hero = new Hero3D(document.getElementById('hero') as HTMLCanvasElement);
+    let roster: AthleteInfo[] = DEMO_ATHLETES;
+    let idx = 0;
+    const feature = () => {
+      const a = roster[idx % roster.length];
+      idx++;
+      hero?.set(a, 0xe8631a);
+      const feat = document.getElementById('feat');
+      const rb = document.getElementById('ringbox');
+      if (!feat || !rb) return;
+      feat.classList.remove('in'); void feat.offsetWidth; feat.classList.add('in');
+      feat.innerHTML = `
+        <div class="fmeta"><span>#${a.numero}</span><span>${esc(a.sala)}</span><span>${a.altura === 'P' ? 'BAIXO' : a.altura === 'M' ? 'MÉDIO' : 'ALTO'}</span></div>
+        <div class="fname gold">${esc(a.nome.toUpperCase())}</div>
+        <div class="fsub">${esc(a.apelido)} · atleta em destaque</div>
+        ${curve(a)}
+        <div class="fovr"><b class="gold">${a.overall}</b><span>OVERALL</span></div>`;
+      rb.innerHTML = `<div class="rlabel">PERFIL DO ATLETA</div>${ring([['REB', a.attrs.rebote, '#ff3b4a'], ['PAS', a.attrs.passe, '#2bdc6b'], ['BLQ', a.attrs.bloqueio, '#2f7bff']])}`;
+    };
+    fetch('/api/roster').then((r) => (r.ok ? r.json() : [])).then((list: AthleteInfo[]) => {
+      if (list.length) { roster = list.sort(() => Math.random() - 0.5); idx = 0; feature(); }
+    }).catch(() => {});
+    feature();
+    heroTimer = window.setInterval(feature, 7000);
   }
 
   // ------------------------------------------------------------------ sala
@@ -107,13 +176,13 @@ function start() {
 
   function waiting(r: RoomView) {
     stopGame();
-    showAero(true);
+    showAero(false);
     const me = r.players[r.seat];
     const other = r.players[1 - r.seat];
     const host = r.seat === 0;
     const both = !!other;
     app.innerHTML = `
-      <div class="screen"><div class="card stack">
+      <div class="screen dk"><div class="spot"></div><div class="card stack">
         <h2>Sala ${host ? 'criada' : 'encontrada'}</h2>
         <p class="sub">${host ? 'Passe este código para o adversário entrar:' : 'Você entrou! Aguarde o anfitrião iniciar a partida.'}</p>
         <div class="code" id="codebox">${r.code}</div>
@@ -145,7 +214,7 @@ function start() {
 
   function pick(r: RoomView) {
     stopGame();
-    showAero(true);
+    showAero(false);
     const color = r.seat === 0 ? 0xe8631a : 0x1f6fe0;
     let sel = [...r.picked];
     const me = r.players[r.seat]!;
@@ -153,7 +222,7 @@ function start() {
     const draw = () => {
       const left = Math.max(0, Math.ceil(((r.deadline ?? 0) - Date.now()) / 1000));
       app.innerHTML = `
-        <div class="screen"><div class="card wide">
+        <div class="screen dk"><div class="spot"></div><div class="card wide">
           <div class="row" style="align-items:flex-start">
             <div><h2>Escolha 2 dos 5 atletas</h2><p class="sub">Sala <b>${r.code}</b> · ${esc(me.name)} vs ${other ? esc(other.name) : '…'}</p></div>
             <div style="text-align:right"><div class="timer" id="tm">${left}s</div>
@@ -253,6 +322,7 @@ function start() {
   const lastScore = (): [number, number] => view?.score ?? [0, 0];
 
   function stopGame() {
+    stopHero();
     view?.dispose(); view = null;
     training?.dispose(); training = null;
     overlay?.remove(); overlay = null;
