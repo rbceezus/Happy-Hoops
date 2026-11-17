@@ -62,6 +62,10 @@ export class Bot {
         if (g.rng.next() < 0.5) f.ev.push({ k: 'cross', dir: g.rng.next() < 0.5 ? -1 : 1 });
         else f.ev.push({ k: 'spin' });
       }
+      if (dist(me.x, me.z, HOOP.x, HOOP.z) < 3.6 && me.readyAt <= g.t && !me.dash && g.rng.next() < 0.02) {
+        f.ev.push({ k: 'dunk' });
+        return f;
+      }
       const d = dist(me.x, me.z, this.spot.x, this.spot.z);
       if (d > 0.6) { go(this.spot.x, this.spot.z, 0.5, true); return f; }
       if (me.readyAt <= g.t && !me.dash) f.ev.push({ k: 'shootDown' });
@@ -88,11 +92,12 @@ export class Bot {
     go(o.x + h.x * 1.15, o.z + h.z * 1.15, 0.25);
     const dd = dist(me.x, me.z, o.x, o.z);
     f.contest = dd < 2.4;
-    if (o.shot && !o.shot.released) {
+    if (o.dunk && !this.jumped && dd < 2.2) { f.ev.push({ k: 'shootDown' }); this.jumped = true; }
+    else if (o.shot && !o.shot.released) {
       if (o.shot.t === o.shot.t && !this.jumped && o.shot.t >= 0.12 + this.jumpErr && dd < 1.6 && g.rng.next() < 0.4 + 0.3 * this.skill) {
         f.ev.push({ k: 'shootDown' }); this.jumped = true;
       }
-    } else if (!o.shot) { this.jumped = false; this.jumpErr = g.rng.range(-0.1, 0.12); }
+    } else if (!o.shot && !o.dunk) { this.jumped = false; this.jumpErr = g.rng.range(-0.1, 0.12); }
     return f;
   }
 }

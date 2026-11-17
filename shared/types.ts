@@ -58,6 +58,7 @@ export type InputEvent =
   | { k: 'cross'; dir: -1 | 1 }
   | { k: 'spin' }
   | { k: 'switch' }
+  | { k: 'dunk' }
   | { k: 'select'; slot: 0 | 1 }
   | { k: 'check' };
 
@@ -75,14 +76,14 @@ export const emptyInput = (): InputFrame => ({ mx: 0, mz: 0, run: false, contest
 export type Phase = 'check' | 'live' | 'score' | 'over';
 
 export const F = {
-  BALL: 1, SHOOT: 2, JUMP: 4, CONTEST: 8, FALLEN: 16, STUN: 32, RUN: 64, SPIN: 128, CROSS: 256, READY: 512,
+  BALL: 1, SHOOT: 2, JUMP: 4, CONTEST: 8, FALLEN: 16, STUN: 32, RUN: 64, SPIN: 128, CROSS: 256, READY: 512, DUNK: 1024,
 } as const;
 
 // [x, z, rot, y, flags, speed, shotT, animP, stamina]
 export type AthSnap = [number, number, number, number, number, number, number, number, number];
 
 export interface GameEvent {
-  e: 'swish' | 'rim' | 'board' | 'block' | 'ankle' | 'score' | 'check' | 'shot' | 'pass' | 'bounce' | 'buzzer' | 'violation' | 'rebound' | 'steps';
+  e: 'swish' | 'rim' | 'board' | 'block' | 'ankle' | 'score' | 'check' | 'shot' | 'pass' | 'bounce' | 'buzzer' | 'violation' | 'rebound' | 'dunk' | 'steps';
   a?: number; // atleta envolvido
   v?: number; // intensidade/valor
   t?: Team;

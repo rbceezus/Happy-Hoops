@@ -61,6 +61,7 @@ export class Controls {
       case 'KeyQ': this.push({ k: 'cross', dir: -1 }); break;
       case 'KeyE': this.push({ k: 'cross', dir: 1 }); break;
       case 'KeyR': this.push({ k: 'spin' }); break;
+      case 'KeyX': this.push({ k: 'dunk' }); break;
       case 'Tab': this.push({ k: 'switch' }); break;
       case 'Digit1': this.push({ k: 'select', slot: 0 }); break;
       case 'Digit2': this.push({ k: 'select', slot: 1 }); break;

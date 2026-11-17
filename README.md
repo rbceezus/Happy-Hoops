@@ -42,6 +42,7 @@ Desenvolvimento com recarga automática: `npm run dev:server` e, em outro termin
 | Arremessar | **Espaço** segurado, solte no ponto verde do medidor |
 | Pular (toco / rebote) | **Espaço** sem a bola |
 | Crossover / giro | **Q** · **E** / **R** |
+| Enterrar | **X** (a até ~4 m da cesta, com a bola e o arco já limpo) |
 | Passe normal / pingado | **F** ou clique esquerdo / **G** ou clique direito |
 | Contestar (defesa) | segurar **clique direito** (ou **C**) perto do arremessador |
 | Trocar de atleta | **Tab** (no ataque, o controle passa a quem recebe o passe) |

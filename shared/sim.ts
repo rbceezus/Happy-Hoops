@@ -1,5 +1,6 @@
 // Simulação autoritativa do jogo (roda no servidor e também offline no cliente para o modo treino).
 import { BAL } from './balance';
+import { contestLevel } from './contest';
 import {
   ARC_R, BALL_R, BOARD_HW, BOARD_Y0, BOARD_Y1, BOARD_Z, CHECK_POS, CLEAR_MARGIN, COURT, HOOP, RIM_R, RIM_TUBE,
   clamp, dist, isBeyondArc, lerp, nrm,
@@ -21,6 +22,7 @@ export interface Ath {
   y: number; vy: number; jumpT: number; // jumpT >= 0 => no ar (pulo livre)
   stamina: number; tired: boolean;
   shot: { t: number; released: boolean } | null;
+  dunk: { t: number; T: number; sx: number; sz: number; done: boolean } | null;
   shotLand: number; // tempo restante de aterrissagem após soltar
   contesting: boolean;
   dash: { t: number; T: number; dx: number; dz: number; speed: number; kind: 'cross' | 'spin' } | null;
@@ -42,6 +44,8 @@ export interface Ball {
   // passe
   passFrom: number; passTo: number; passT: number; passD: number; passBounce: boolean; passSx: number; passSy: number; passSz: number; bounced: boolean;
   homingTo: number;
+  dunkShot: boolean;
+  born: number;
 }
 
 export interface GameOptions {
@@ -81,7 +85,7 @@ export class Game {
         this.ath.push({
           id: team * 2 + slot, team, slot, info, scale: BAL.height[info.altura] ?? 1,
           x: 0, z: 8, vx: 0, vz: 0, rot: 0, y: 0, vy: 0, jumpT: -1,
-          stamina: BAL.move.staminaMax, tired: false, shot: null, shotLand: 0, contesting: false, dash: null,
+          stamina: BAL.move.staminaMax, tired: false, shot: null, dunk: null, shotLand: 0, contesting: false, dash: null,
           dribCd: 0, stunT: 0, fallT: 0, slowT: 0, readyAt: 0, noGrabUntil: 0,
           aiBlockAt: -1, aiJumpErr: 0, aiContestRoll: false, speed: 0, moving: false,
         });
@@ -91,7 +95,7 @@ export class Game {
       x: 0, y: 1, z: 8, vx: 0, vy: 0, vz: 0, st: 'held', holder: 0, lastTouch: 0,
       shooter: -1, shotTeam: 0, made: false, value: 1, touched: false, scored: false, lastRimEv: -1,
       passFrom: -1, passTo: -1, passT: 0, passD: 1, passBounce: false, passSx: 0, passSy: 0, passSz: 0, bounced: false,
-      homingTo: -1,
+      homingTo: -1, dunkShot: false, born: 0,
     };
     this.startCheck(opts.firstPoss ?? (this.rng.next() < 0.5 ? 0 : 1));
   }
@@ -131,7 +135,7 @@ export class Game {
     this.place(dh, 0, CHECK_POS.z - 1.3);
     this.place(dother, wingX * 0.8, 3.8);
     for (const a of this.ath) {
-      a.shot = null; a.shotLand = 0; a.dash = null; a.y = 0; a.vy = 0; a.jumpT = -1; a.stunT = 0; a.fallT = 0; a.slowT = 0;
+      a.shot = null; a.dunk = null; a.shotLand = 0; a.dash = null; a.y = 0; a.vy = 0; a.jumpT = -1; a.stunT = 0; a.fallT = 0; a.slowT = 0;
       a.contesting = false; a.aiBlockAt = -1;
     }
     this.ctl[this.opp(team)] = dh.slot;
@@ -204,7 +208,7 @@ export class Game {
       case 'select': {
         const to = (ev.k === 'select' ? ev.slot : 1 - c.slot) as 0 | 1;
         if (to === c.slot) return;
-        if (this.hasBall(c) || c.shot) {
+        if (this.hasBall(c) || c.shot || c.dunk) {
           this.emit({ e: 'violation', m: 'TROCA', t: team, v: 0 });
           return;
         }
@@ -214,7 +218,7 @@ export class Game {
       case 'shootDown': {
         if (c.fallT > 0) return;
         if (this.hasBall(c)) {
-          if (c.shot || c.readyAt > this.t || c.dash) return;
+          if (c.shot || c.dunk || c.readyAt > this.t || c.dash) return;
           if (this.needsClear && !isBeyondArc(c.x, c.z, CLEAR_MARGIN)) {
             this.emit({ e: 'violation', m: 'LIMPE A BOLA', t: team, v: 0 });
             return;
@@ -230,6 +234,20 @@ export class Game {
         if (c.shot && !c.shot.released) this.release(c, ev.hold);
         break;
       }
+      case 'dunk': {
+        if (!this.hasBall(c) || c.shot || c.dunk || c.fallT > 0 || c.dash || c.readyAt > this.t) return;
+        if (this.needsClear && !isBeyondArc(c.x, c.z, CLEAR_MARGIN)) {
+          this.emit({ e: 'violation', m: 'LIMPE A BOLA', t: team, v: 0 });
+          return;
+        }
+        if (dist(c.x, c.z, HOOP.x, HOOP.z) > BAL.dunk.range) {
+          this.emit({ e: 'violation', m: 'LONGE', t: team, v: 0 });
+          return;
+        }
+        c.dunk = { t: 0, T: BAL.dunk.T, sx: c.x, sz: c.z, done: false };
+        c.vx = c.vz = 0;
+        break;
+      }
       case 'pass': this.doPass(c, ev.kind); break;
       case 'cross': this.doDribble(c, 'cross', ev.dir); break;
       case 'spin': this.doDribble(c, 'spin', 0); break;
@@ -242,7 +260,7 @@ export class Game {
 
   // ---------------------------------------------------------------- dribles
   private doDribble(a: Ath, kind: 'cross' | 'spin', dir: number) {
-    if (!this.hasBall(a) || a.shot || a.dribCd > 0 || a.fallT > 0) return;
+    if (!this.hasBall(a) || a.shot || a.dunk || a.dribCd > 0 || a.fallT > 0) return;
     a.dribCd = BAL.drible.cooldown;
     let dx: number, dz: number;
     if (kind === 'cross') {
@@ -275,7 +293,7 @@ export class Game {
 
   // ---------------------------------------------------------------- passe
   private doPass(a: Ath, kind: 'chest' | 'bounce') {
-    if (!this.hasBall(a) || a.shot || a.fallT > 0) return;
+    if (!this.hasBall(a) || a.shot || a.dunk || a.fallT > 0) return;
     const to = this.ath[a.team * 2 + (1 - a.slot)];
     const b = this.ball;
     const n = this.nr(a, 'passe');
@@ -327,11 +345,10 @@ export class Game {
     const n = this.nr(a, attrKey);
     const g = (S.green.base + S.green.perAttr * n) * S.zoneWindow[zone];
     const ae = Math.abs(err);
-    const grade: 'green' | 'good' | 'bad' | 'awful' = ae <= g ? 'green' : ae <= g * S.goodMult ? 'good' : ae <= g * S.badMult ? 'bad' : 'awful';
+    let grade: 'green' | 'good' | 'bad' | 'awful' = 'awful';
 
     const def = this.teamAth(this.opp(a.team));
     // --- toco
-    const hx = a.x + (HOOP.x - a.x) * 0.0;
     for (const d of def) {
       if (!this.airborne(d) || d.fallT > 0) continue;
       const dd = dist(a.x, a.z, d.x, d.z);
@@ -351,35 +368,90 @@ export class Game {
       }
     }
 
+    // --- contestação (encolhe a janela verde e reduz a chance fora do verde)
+    const level = this.contestOn(a);
+    const free = 1 - level;
+    const ge = g * (1 - S.greenShrink * level);
+    grade = ae <= ge ? 'green' : ae <= ge * S.goodMult ? 'good' : ae <= ge * S.badMult ? 'bad' : 'awful';
+
     // --- chance de acerto
     const [lo, hi] = S.base[zone];
     const base = lerp(lo, hi, n);
     let chance: number;
-    if (grade === 'green') chance = base + (S.maxChance - base) * (S.greenPull.base + S.greenPull.perAttr * n);
+    if (grade === 'green') chance = 1;
     else if (grade === 'good') chance = base * S.goodMult2;
     else if (grade === 'bad') chance = base * S.badChance;
     else chance = base * S.awfulChance;
-    // contestação
-    let free = 1;
-    for (const d of def) {
-      if (d.fallT > 0) continue;
-      const dd = dist(a.x, a.z, d.x, d.z);
-      if (dd > S.contestRange) continue;
-      const fd = clamp(1 - (dd - 0.6) / (S.contestRange - 0.6), 0, 1);
-      const toH = norm2(HOOP.x - a.x, HOOP.z - a.z);
-      const toD = norm2(d.x - a.x, d.z - a.z);
-      const front = toH.x * toD.x + toH.z * toD.z > 0.2 ? 1 : 0.4;
-      const hand = this.airborne(d) ? 1.1 : d.contesting ? 1 : S.handsDownFactor;
-      free *= 1 - clamp(S.contestMax * this.nr(d, 'defesa') * fd * front * hand, 0, 0.95);
-    }
     chance *= free;
     if (Math.hypot(a.vx, a.vz) > S.movingSpeed) chance *= S.movingPenalty;
     if (a.stamina < BAL.move.tooTired) chance *= 1 - 0.15 * (1 - a.stamina / BAL.move.tooTired);
-    chance = clamp(chance, 0.02, grade === 'green' ? S.maxChance : 0.9);
-    // timing perfeito (verde) sempre cai de chuá; só um toco impede
+    chance = clamp(chance, 0.02, grade === 'green' ? 1 : 0.9);
     const made = grade === 'green' ? true : this.rng.next() < chance;
 
     this.launchShot(a, made, grade, err, zone);
+  }
+
+  private contestOn(a: Ath): number {
+    return contestLevel(a.x, a.z, this.teamAth(this.opp(a.team)).map((d) => ({
+      x: d.x, z: d.z, contesting: d.contesting, airborne: this.airborne(d), fallen: d.fallT > 0, def: d.info.attrs.defesa,
+    })));
+  }
+
+  // ---------------------------------------------------------------- enterrada
+  private stepDunk(a: Ath, dt: number) {
+    const D = BAL.dunk;
+    const dk = a.dunk!;
+    dk.t += dt;
+    const u = dk.t / dk.T;
+    const k0 = clamp((u - 0.08) / 0.62, 0, 1);
+    const k = k0 * k0 * (3 - 2 * k0);
+    const px = a.x, pz = a.z;
+    a.x = lerp(dk.sx, HOOP.x, k); a.z = lerp(dk.sz, D.targetZ, k);
+    a.vx = (a.x - px) / dt; a.vz = (a.z - pz) / dt; a.speed = Math.hypot(a.vx, a.vz);
+    const w = (u - 0.55) / 0.55;
+    a.y = Math.max(0, D.apex * a.scale * (1 - w * w));
+    a.rot = Math.atan2(HOOP.x - a.x, HOOP.z - a.z);
+    a.moving = true;
+    if (!dk.done && u >= D.releaseU) this.resolveDunk(a);
+    if (u >= 1) { a.dunk = null; a.y = 0; a.vx = a.vz = 0; a.speed = 0; }
+  }
+
+  private resolveDunk(a: Ath) {
+    const D = BAL.dunk;
+    a.dunk!.done = true;
+    const b = this.ball;
+    const nFin = this.nr(a, 'finishing');
+    // toco
+    for (const d of this.teamAth(this.opp(a.team))) {
+      if (!this.airborne(d) || d.fallT > 0) continue;
+      const dd = dist(a.x, a.z, d.x, d.z);
+      if (dd > BAL.block.range * 1.15) continue;
+      const ft = clamp(1 - Math.abs(d.jumpT - BAL.block.jumpApexT) / BAL.block.timingWindow, 0, 1);
+      if (ft < 0.15) continue;
+      const fd = 1 - 0.6 * (dd / (BAL.block.range * 1.15));
+      const chance = clamp((BAL.block.base + BAL.block.perAttr * this.nr(d, 'bloqueio') * ft * fd - BAL.block.shooterPenalty * nFin) * D.blockMult, 0, BAL.block.maxChance);
+      if (this.rng.next() < chance) { this.blockShot(a, d); a.dunk = null; return; }
+    }
+    const level = this.contestOn(a);
+    const chance = clamp(D.base + D.perFin * nFin + (D.heightBonus[a.info.altura] ?? 0) - D.contest * level, D.minChance, D.maxChance);
+    const made = this.rng.next() < chance;
+    b.shooter = a.id; b.shotTeam = a.team; b.lastTouch = a.team; b.holder = -1; b.scored = false; b.value = 1;
+    this.clockRun = false;
+    this.stats.shots[a.team]++;
+    if (made) {
+      b.st = 'shot'; b.made = true; b.touched = false; b.dunkShot = true; b.born = this.t;
+      b.x = HOOP.x; b.y = HOOP.y + 0.4; b.z = HOOP.z; b.vx = b.vz = 0; b.vy = -7;
+      this.emit({ e: 'dunk', a: a.id, t: a.team, v: 1 });
+    } else {
+      b.st = 'loose'; b.made = false; b.touched = true; b.dunkShot = false;
+      b.x = HOOP.x; b.y = HOOP.y + 0.2; b.z = HOOP.z + 0.1;
+      b.vx = this.rng.range(-2.2, 2.2); b.vz = this.rng.range(1.5, 3.2); b.vy = this.rng.range(2.5, 4.2);
+      a.noGrabUntil = this.t + 0.4;
+      this.emit({ e: 'dunk', a: a.id, t: a.team, v: 0 });
+      this.emit({ e: 'rim', v: 1 });
+      this.reb = null;
+      this.autoSwitchToBall();
+    }
   }
 
   private blockShot(a: Ath, d: Ath) {
@@ -446,6 +518,7 @@ export class Game {
     const T = t1 + t2;
     b.x = sx; b.y = sy; b.z = sz;
     b.vx = (tx - sx) / T; b.vz = (tz - sz) / T; b.vy = vy0;
+    b.dunkShot = false; b.born = this.t;
     b.st = 'shot'; b.shooter = a.id; b.shotTeam = a.team; b.made = made; b.touched = false; b.scored = false;
     b.value = zone === 'tres' ? 2 : 1; b.lastTouch = a.team; b.holder = -1;
     this.clockRun = false;
@@ -512,6 +585,8 @@ export class Game {
       a.slowT = Math.max(0, a.slowT - dt);
       a.fallT = Math.max(0, a.fallT - dt);
 
+      if (a.dunk) { this.stepDunk(a, dt); a.contesting = false; continue; }
+
       // intenção de movimento
       let dx = 0, dz = 0, mag = 0, run = false;
       let contest = false;
@@ -543,7 +618,7 @@ export class Game {
 
       // velocidade desejada
       let top = wantsRun ? BAL.move.run : BAL.move.walk;
-      const defSpeed = this.isOffense(a) ? 0.97 + 0.06 * this.nr(a, 'drible') : 0.93 + BAL.defense.speedPer * this.nr(a, 'defesa');
+      const defSpeed = this.isOffense(a) ? 0.95 + 0.05 * this.nr(a, 'drible') : BAL.defense.speedBase + BAL.defense.speedPer * this.nr(a, 'defesa');
       top *= defSpeed;
       if (a.stunT > 0) top *= 0.25;
       if (a.slowT > 0) top *= 0.6;
@@ -684,20 +759,22 @@ export class Game {
     // contestação automática + toco de IA
     const dd = dist(a.x, a.z, o.x, o.z);
     let contest = false;
-    if (o.shot && dd < 2.4) {
-      if (a.aiBlockAt < 0 && o.shot.t < 0.2) {
-        a.aiContestRoll = this.rng.next() < 0.55;
-        const tryBlock = this.rng.next() < 0.25 + 0.5 * this.nr(a, 'bloqueio') && dd < 1.6;
+    const osT = o.shot ? o.shot.t : o.dunk ? o.dunk.t : -1;
+    if (osT >= 0 && dd < 2.8) {
+      if (a.aiBlockAt < 0 && osT < 0.2) {
+        a.aiContestRoll = this.rng.next() < 0.75;
+        const tryBlock = this.rng.next() < 0.35 + 0.5 * this.nr(a, 'bloqueio') && dd < 2.0;
         if (tryBlock) {
-          const err = this.rng.range(-0.22, 0.22) * (1.25 - this.nr(a, 'defesa'));
-          a.aiBlockAt = this.t + (BAL.shot.idealMs / 1000 - BAL.block.jumpApexT) + err - o.shot.t;
+          const err = this.rng.range(-0.2, 0.2) * (1.2 - this.nr(a, 'defesa'));
+          const lead = o.shot ? BAL.shot.idealMs / 1000 - BAL.block.jumpApexT : BAL.dunk.T * BAL.dunk.releaseU - BAL.block.jumpApexT;
+          a.aiBlockAt = this.t + lead + err - osT;
         } else a.aiBlockAt = this.t + 99;
       }
-      contest = a.aiContestRoll || dd < 1.4;
+      contest = a.aiContestRoll || dd < 1.8;
       if (a.aiBlockAt > 0 && a.aiBlockAt < this.t + 50 && this.t >= a.aiBlockAt && a.jumpT < 0 && a.y === 0) {
         this.startJump(a); a.aiBlockAt = this.t + 99;
       }
-    } else if (!o.shot) a.aiBlockAt = -1;
+    } else if (osT < 0) a.aiBlockAt = -1;
     return { ...mv, contest };
   }
 
@@ -717,7 +794,7 @@ export class Game {
     const a = this.ath[b.holder];
     b.x = a.x + Math.sin(a.rot) * 0.35;
     b.z = a.z + Math.cos(a.rot) * 0.35;
-    b.y = (a.shot ? HAND_H * a.scale + a.y : 1.0 * a.scale) ;
+    b.y = a.shot ? HAND_H * a.scale + a.y : a.dunk ? HAND_H * a.scale + a.y + 0.25 : 1.0 * a.scale;
     b.vx = b.vy = b.vz = 0;
   }
 
@@ -794,8 +871,9 @@ export class Game {
     // aro (anel)
     if (b.st === 'shot' || b.st === 'loose') {
       const dx = b.x - HOOP.x, dz = b.z - HOOP.z;
-      const rr = Math.hypot(dx, dz) || 1e-6;
-      const px = HOOP.x + (dx / rr) * RIM_R, pz = HOOP.z + (dz / rr) * RIM_R;
+      const rr = Math.hypot(dx, dz);
+      const ux = rr > 1e-4 ? dx / rr : 1, uz = rr > 1e-4 ? dz / rr : 0; // bola no centro exato: nenhum ponto do aro a toca
+      const px = HOOP.x + ux * RIM_R, pz = HOOP.z + uz * RIM_R;
       const ex = b.x - px, ey = b.y - HOOP.y, ez = b.z - pz;
       const d = Math.hypot(ex, ey, ez);
       const minD = BALL_R + RIM_TUBE;
@@ -849,6 +927,7 @@ export class Game {
         if (b.st === 'shot' && !b.scored) { b.st = 'loose'; }
       }
     }
+    if (b.st === 'shot' && !b.scored && this.t - b.born > 6) b.st = 'loose'; // segurança: nunca fica preso
     // saiu do arremesso sem entrar e já tocou no aro, vira bola solta
     if (b.st === 'shot' && !b.scored && b.touched && !b.made) b.st = 'loose';
     if (b.st === 'shot' && b.made && b.touched && b.y < HOOP.y - 0.8 && !b.scored) b.st = 'loose';
@@ -865,7 +944,7 @@ export class Game {
     this.scoreT = 0;
     this.clockRun = false;
     this.poss = team; // posse fica com quem fez
-    this.emit({ e: 'swish', v: b.touched ? 0 : 1, a: b.shooter, t: team });
+    if (!b.dunkShot) this.emit({ e: 'swish', v: b.touched ? 0 : 1, a: b.shooter, t: team });
     this.emit({ e: 'score', v: b.value, t: team, a: b.shooter });
   }
 
@@ -948,7 +1027,8 @@ export class Game {
       if (p.dash?.kind === 'spin') f |= F.SPIN;
       if (p.dash?.kind === 'cross') f |= F.CROSS;
       if (p.readyAt <= this.t) f |= F.READY;
-      const anim = p.dash ? p.dash.t / p.dash.T : 0;
+      if (p.dunk) f |= F.DUNK;
+      const anim = p.dash ? p.dash.t / p.dash.T : p.dunk ? p.dunk.t / p.dunk.T : 0;
       return [r3(p.x), r3(p.z), r3(p.rot), r3(p.y), f, r3(p.speed), p.shot ? r3(p.shot.t) : -1, r3(anim), Math.round(p.stamina)];
     });
     const b = this.ball;

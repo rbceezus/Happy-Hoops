@@ -97,3 +97,12 @@ export function buzzer() { tone(180, 1.0, 0.35, 'sawtooth'); tone(185, 1.0, 0.3,
 export function cheer() { noise(1.2, { type: 'bandpass', f: 900, f2: 1700, q: 0.8 }, 0.35, 0.15); }
 export function tick() { tone(900, 0.05, 0.12, 'square'); }
 export function violation() { tone(300, 0.25, 0.25, 'square', 200); }
+
+/** Enterrada: aro vibrando forte + tabela + torcida. */
+export function dunk() {
+  board(1);
+  [1, 1.7, 2.6, 3.9].forEach((m, i) => tone(330 * m, 0.9 - i * 0.12, 0.34 / (i + 1), 'sine', undefined, 0.02));
+  tone(90, 0.35, 0.7, 'sine', 40);
+  noise(0.09, { type: 'highpass', f: 2200 }, 0.5, 0.001);
+  noise(1.6, { type: 'bandpass', f: 800, f2: 1900, q: 0.8 }, 0.5, 0.2, 0.1);
+}

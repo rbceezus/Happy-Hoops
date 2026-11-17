@@ -41,22 +41,25 @@ export const BAL = {
     } as Record<string, [number, number]>,
     movingPenalty: 0.85,
     movingSpeed: 3.0,
-    contestMax: 0.55,
-    contestRange: 2.6,
-    handsDownFactor: 0.35,
+    contestMax: 0.85,
+    contestRange: 3.4,
+    handsDownFactor: 0.55,
+    behindFactor: 0.55,
+    defBase: 0.45, // contestação mínima mesmo com defesa baixa
+    greenShrink: 0.65, // contestação encolhe a janela verde (perfeito continua entrando, mas fica mais difícil)
     finishingRange: 2.5,
     cooldown: 0.0,
   },
 
   block: {
-    base: 0.05,
-    perAttr: 0.5,
-    shooterPenalty: 0.2,
-    range: 1.25,
+    base: 0.12,
+    perAttr: 0.6,
+    shooterPenalty: 0.12,
+    range: 1.7,
     jumpApexT: 0.39,
-    timingWindow: 0.3,
-    threeMult: 0.4,
-    maxChance: 0.85,
+    timingWindow: 0.42,
+    threeMult: 0.5,
+    maxChance: 0.9,
   },
 
   jump: { vy: 3.8 },
@@ -98,8 +101,20 @@ export const BAL = {
   },
 
   defense: {
-    speedPer: 0.18, // defesa aumenta velocidade em até +18%
-    gap: 1.15,
+    speedBase: 1.0,
+    speedPer: 0.15, // defesa aumenta velocidade em até +15%
+    gap: 0.9,
+  },
+
+  dunk: {
+    range: 4.2, // distância máxima da cesta para iniciar a enterrada
+    T: 0.68, // duração total (s)
+    apex: 1.05, // altura do pulo (m)
+    releaseU: 0.62, // momento em que a bola é enterrada (fração de T)
+    base: 0.5, perFin: 0.45, contest: 0.55, minChance: 0.12, maxChance: 0.97,
+    heightBonus: { P: -0.15, M: 0, G: 0.1 } as Record<string, number>,
+    blockMult: 0.75,
+    targetZ: 0.5,
   },
 
   height: { P: 0.93, M: 1.0, G: 1.07 } as Record<string, number>,

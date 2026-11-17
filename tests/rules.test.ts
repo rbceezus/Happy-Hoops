@@ -183,4 +183,59 @@ describe('regras', () => {
     }
     expect(n).toBe(120);
   });
+
+  it('enterrada: perto da cesta pontua (1 ponto), longe é recusada, precisa limpar a bola', () => {
+    const big = mk({ finishing: 95 }, 1); // Pedrão, alto
+    let made = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const g = new Game(teams([big, mk({}, 0)]), { seed, firstPoss: 0 });
+      g.setInput(0, { ...idle, ev: [{ k: 'check' }] }); g.step();
+      for (const d of g.teamAth(1)) { d.x = -7; d.z = 11; }
+      const h = g.controlled(0);
+      h.x = 1.5; h.z = 3.0;
+      g.setInput(0, { ...idle, ev: [{ k: 'dunk' }] });
+      const evs = run(g, 2.5, (q) => q.phase === 'score');
+      expect(evs.some((e) => e.e === 'dunk')).toBe(true);
+      if (g.phase === 'score') { made++; expect(g.score[0]).toBe(1); expect(evs.some((e) => e.e === 'swish')).toBe(false); }
+    }
+    expect(made).toBeGreaterThanOrEqual(17); // finishing alto + sem defesa quase sempre converte
+
+    const far = live(2);
+    far.controlled(0).x = 0; far.controlled(0).z = 8;
+    far.setInput(0, { ...idle, ev: [{ k: 'dunk' }] });
+    const e2 = run(far, 0.2);
+    expect(e2.some((e) => e.e === 'violation' && e.m === 'LONGE')).toBe(true);
+    expect(far.controlled(0).dunk).toBeNull();
+
+    const nc = live(3);
+    nc.needsClear = true;
+    nc.controlled(0).x = 0; nc.controlled(0).z = 2;
+    nc.setInput(0, { ...idle, ev: [{ k: 'dunk' }] });
+    expect(run(nc, 0.1).some((e) => e.e === 'violation' && e.m === 'LIMPE A BOLA')).toBe(true);
+  });
+
+  it('defesa: contestação forte reduz bastante o acerto e encolhe a janela verde', () => {
+    const rate = (defOn: boolean) => {
+      let made = 0, n = 0;
+      for (let seed = 1; seed <= 60; seed++) {
+        const g = new Game(teams([mk({ arremessoMedia: 80 }, 0), mk({}, 1)], [mk({ defesa: 70, bloqueio: 30 }, 2), mk({}, 3)]), { seed, firstPoss: 0 });
+        g.setInput(0, { ...idle, ev: [{ k: 'check' }] }); g.step();
+        const h = g.controlled(0); const d = g.teamAth(1)[h.slot]; const d2 = g.teamAth(1)[1 - h.slot];
+        h.x = 0; h.z = 5; h.vx = h.vz = 0; d2.x = -7; d2.z = 11;
+        if (defOn) { d.x = 0; d.z = 4.0; d.contesting = true; } else { d.x = -7; d.z = 11; }
+        d.vx = d.vz = 0;
+        g.ctl[1] = d.slot;
+        // 80ms atrasado: fora do verde estreito mas dentro do verde aberto
+        g.setInput(0, { ...idle, ev: [{ k: 'shootDown' }] });
+        for (let i = 0; i < 38; i++) { if (defOn) g.setInput(1, { ...idle, contest: true }); g.step(); }
+        g.setInput(0, { ...idle, ev: [{ k: 'shootUp', hold: 630 }] });
+        const evs = run(g, 5, (q) => q.phase === 'score' || (q.ball.st === 'held' && q.t > 0.5));
+        n++; if (g.score[0] > 0) made++;
+      }
+      return made / n;
+    };
+    const open = rate(false), guarded = rate(true);
+    console.log({ open, guarded });
+    expect(open - guarded).toBeGreaterThan(0.3);
+  });
 });

@@ -26,7 +26,7 @@ interface Seat {
   msgCount: number;
 }
 
-const EV_KINDS = new Set(['shootDown', 'shootUp', 'pass', 'cross', 'spin', 'switch', 'select', 'check']);
+const EV_KINDS = new Set(['shootDown', 'shootUp', 'pass', 'cross', 'spin', 'switch', 'select', 'dunk', 'check']);
 
 export function sanitizeInput(raw: unknown): InputFrame | null {
   const f = raw as Partial<InputFrame> | null;
