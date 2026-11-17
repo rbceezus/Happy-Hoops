@@ -76,6 +76,21 @@ export async function loadRig(url = '/models/athlete-rig.glb'): Promise<boolean>
   }
 }
 
+/** textura de jeans (trama diagonal fina + variação de tom) */
+function denimTexture(color: number): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const col = new THREE.Color(color);
+  g.fillStyle = `#${col.getHexString()}`; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 128; i += 2) { g.fillStyle = `rgba(255,255,255,${0.05 + (i % 8) * 0.004})`; g.fillRect(0, i, 128, 1); }
+  for (let i = 0; i < 128; i += 2) { g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(i, 0, 1, 128); }
+  for (let i = 0; i < 700; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '0,0,0'},${Math.random() * 0.07})`; g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 4); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const seg = (u: number, a: number, b: number) => clamp01((u - a) / (b - a));
 const ease = (t: number) => t * t * (3 - 2 * t);
@@ -109,60 +124,104 @@ function buildRigged(info: AthleteInfo, teamColor: number, opts: { label?: boole
     m.material = (m.material as THREE.Material).name === 'M_Joints' ? skinJoint : skin;
   });
 
-  // ---- roupas e acessórios (medidos na pose de referência do modelo e presos aos ossos)
-  const jersey = new THREE.MeshStandardMaterial({ color: teamColor, roughness: 0.62 });
+  // ---- roupas (medidas na pose de referência do modelo e presas aos ossos)
   const trim = mat(0xffffff, 0.5);
-  const shortsMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(teamColor).multiplyScalar(0.6).getHex(), roughness: 0.65, side: THREE.DoubleSide });
-  const shoeMat = mat(0xf6f6f6, 0.4), accent = mat(teamColor, 0.4), sole = mat(0x202026, 0.8);
+  const teamBand = mat(teamColor, 0.45);
   const attach = (o: THREE.Object3D, bone: string) => { model.add(o); model.updateMatrixWorld(true); bones[bone].attach(o); return o; };
   const geo = (g: THREE.BufferGeometry, sx = 1, sy = 1, sz = 1, tx = 0, ty = 0, tz = 0) => { g.scale(sx, sy, sz); g.translate(tx, ty, tz); return g; };
+  const cloth = (color: number, rough = 0.85, extra: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, roughness: rough, ...extra });
 
-  // camisa (regata): casca de revolução com armcavas; número atrás e na frente
-  const jerseyMesh = mesh(geo(lathe([[0.001, 0.99], [0.15, 0.99], [0.152, 1.08], [0.158, 1.18], [0.178, 1.28], [0.184, 1.36], [0.162, 1.43], [0.1, 1.47], [0.001, 1.48]], 28), 1, 1, 0.8, 0, 0, 0.008), jersey, 0, 0, 0, model);
-  attach(jerseyMesh, B.sp2);
-  const hem = mesh(geo(new THREE.TorusGeometry(0.15, 0.008, 8, 28), 1, 1, 0.8, 0, 0, 0.008), trim, 0, 0.99, 0, model);
-  hem.rotation.x = Math.PI / 2; hem.position.set(0, 0.99, 0); attach(hem, B.sp2);
+  // --- camiseta (todas pretas)
+  const blackTop = cloth(0x141416, 0.88);
+  const sleeveMat = cloth(0x141416, 0.88, { side: THREE.DoubleSide });
+  const isTank = info.roupaTop === 'regata-preta';
   const tex = numberTexture(info.numero, '#ffffff');
-  const numMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
-  const numB = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), numMat);
-  numB.position.set(0, 1.2, -0.13); numB.rotation.y = Math.PI; attach(numB, B.sp2);
-  const numF = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.1), numMat);
-  numF.position.set(0, 1.17, 0.145); attach(numF, B.sp2);
-  for (const sx of [-1, 1]) {
-    const stripe = mesh(new THREE.BoxGeometry(0.012, 0.36, 0.012), trim, 0.176 * sx, 1.2, 0.0, model);
-    stripe.castShadow = false; attach(stripe, B.sp2);
+  if (isTank) {
+    // regata: casca com cava funda, alças e número
+    attach(mesh(geo(lathe([[0.001, 0.97], [0.158, 0.97], [0.16, 1.08], [0.168, 1.18], [0.19, 1.28], [0.2, 1.36], [0.178, 1.43], [0.105, 1.475], [0.001, 1.485]], 28), 1, 1, 0.9, 0, 0, 0.004), blackTop, 0, 0, 0, model), B.sp2);
+    for (const sx of [-1, 1]) {
+      const strap = mesh(new THREE.CapsuleGeometry(0.034, 0.1, 4, 10), blackTop, 0.125 * sx, 1.43, 0.0, model);
+      strap.rotation.z = 0.7 * sx; strap.scale.set(1, 1, 0.9); attach(strap, B.sp3);
+    }
+    const numMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+    const numB = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), numMat);
+    numB.position.set(0, 1.2, -0.13); numB.rotation.y = Math.PI; attach(numB, B.sp2);
+    const numF = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.09), numMat);
+    numF.position.set(0, 1.17, 0.145); attach(numF, B.sp2);
+  } else {
+    // t-shirt / polo: corpo mais folgado, mais comprido, com mangas curtas
+    attach(mesh(geo(lathe([[0.001, 0.9], [0.172, 0.9], [0.176, 1.02], [0.182, 1.14], [0.2, 1.28], [0.215, 1.37], [0.207, 1.425], [0.172, 1.467], [0.1, 1.492], [0.001, 1.5]], 28), 1, 1, 0.9, 0, 0, 0.004), blackTop, 0, 0, 0, model), B.sp2);
+    const hemT = mesh(geo(new THREE.TorusGeometry(0.172, 0.007, 8, 28), 1, 1, 0.9, 0, 0, 0.004), cloth(0x1b1b1e, 0.8), 0, 0.9, 0, model);
+    hemT.rotation.x = Math.PI / 2; attach(hemT, B.sp2);
+    // mangas (cilindros ao redor do braço, abertos nas pontas)
+    for (const [sx, bone] of [[1, B.uaL], [-1, B.uaR]] as [number, string][]) {
+      const len = info.roupaTop === 'polo-preta' ? 0.17 : 0.15;
+      const x0 = 0.15, x1 = 0.192 + len + 0.012;
+      const sl = mesh(new THREE.CylinderGeometry(0.1, 0.078, x1 - x0, 20, 1, true), sleeveMat, sx * ((x0 + x1) / 2), 1.441, -0.065, model);
+      sl.rotation.z = Math.PI / 2; attach(sl, bone);
+      const cap = mesh(new THREE.SphereGeometry(0.092, 18, 14), sleeveMat, sx * 0.19, 1.43, -0.065, model);
+      attach(cap, bone);
+      const cuff = mesh(new THREE.TorusGeometry(0.078, 0.006, 8, 20), cloth(0x1c1c20, 0.8), sx * x1, 1.441, -0.065, model);
+      cuff.rotation.y = Math.PI / 2; attach(cuff, bone);
+    }
+    if (info.roupaTop === 'polo-preta') {
+      // gola dobrada em V + botões
+      for (const sx of [-1, 1]) {
+        const flap = mesh(new THREE.BoxGeometry(0.075, 0.028, 0.012), cloth(0x1d1d21, 0.8), 0.045 * sx, 1.462, 0.058, model);
+        flap.rotation.set(0.35, 0, -0.55 * sx); attach(flap, B.sp3);
+      }
+      const back = mesh(new THREE.TorusGeometry(0.085, 0.012, 8, 22, Math.PI * 1.35), cloth(0x1d1d21, 0.8), 0, 1.472, -0.01, model);
+      back.rotation.set(Math.PI / 2, 0, Math.PI * 0.82); back.scale.set(1, 0.88, 1); attach(back, B.sp3);
+      const plac = mesh(new THREE.BoxGeometry(0.03, 0.15, 0.008), cloth(0x1f1f23, 0.8), 0, 1.38, 0.148, model);
+      attach(plac, B.sp3);
+      for (const y of [1.43, 1.37]) { const bt = mesh(new THREE.SphereGeometry(0.009, 8, 8), cloth(0x55555a, 0.4), 0, y, 0.153, model); attach(bt, B.sp3); }
+    } else {
+      // gola redonda de t-shirt
+      const neck = mesh(new THREE.TorusGeometry(0.086, 0.012, 8, 24), cloth(0x1c1c20, 0.8), 0, 1.468, 0.006, model);
+      neck.rotation.x = Math.PI / 2; neck.scale.set(1, 0.88, 1); attach(neck, B.sp3);
+    }
   }
 
-  // alças da regata
-  for (const sx of [-1, 1]) {
-    const strap = mesh(new THREE.CapsuleGeometry(0.034, 0.1, 4, 10), jersey, 0.125 * sx, 1.43, 0.0, model);
-    strap.rotation.z = 0.7 * sx; strap.scale.set(1, 1, 0.9); attach(strap, B.sp3);
+  // --- parte de baixo (calça preta / jeans cinza / jeans azul)
+  const denim = info.roupaBottom !== 'calca-preta';
+  const bottomColor = info.roupaBottom === 'jeans-azul' ? 0x2c5aa0 : info.roupaBottom === 'jeans-cinza' ? 0x6c7078 : 0x151517;
+  const pantsMat = denim ? new THREE.MeshStandardMaterial({ color: 0xffffff, map: denimTexture(bottomColor), roughness: 0.92, side: THREE.DoubleSide }) : cloth(bottomColor, 0.85, { side: THREE.DoubleSide });
+  const seam = cloth(denim ? (info.roupaBottom === 'jeans-azul' ? 0xd9b25a : 0xcfcfcf) : 0x2a2a2e, 0.6);
+  attach(mesh(geo(lathe([[0.001, 1.01], [0.178, 1.01], [0.2, 0.95], [0.222, 0.86], [0.222, 0.76]], 28), 1, 1, 0.84), pantsMat, 0, 0, 0, model), B.hips);
+  const belt = mesh(geo(new THREE.TorusGeometry(0.18, 0.011, 8, 28), 1, 1, 0.84), cloth(denim ? 0x3a2a1a : 0x222226, 0.6), 0, 1.0, 0, model);
+  belt.rotation.x = Math.PI / 2; attach(belt, B.hips);
+  if (denim) for (const sx of [-1, 1]) { // bolsos traseiros e costura
+    const pk = mesh(new THREE.BoxGeometry(0.07, 0.075, 0.006), cloth(bottomColor, 0.9), 0.065 * sx, 0.9, -0.147, model);
+    attach(pk, B.hips);
+    const st = mesh(new THREE.BoxGeometry(0.074, 0.004, 0.007), seam, 0.065 * sx, 0.935, -0.149, model); attach(st, B.hips);
   }
-  // bermuda: cós + casca do quadril + uma perna por coxa
-  const shortsTop = mesh(geo(lathe([[0.001, 1.0], [0.17, 1.0], [0.186, 0.95], [0.206, 0.84], [0.22, 0.76]], 28), 1, 1, 0.78, 0, 0, 0), shortsMat, 0, 0, 0, model);
-  attach(shortsTop, B.hips);
-  const band = mesh(geo(new THREE.TorusGeometry(0.17, 0.011, 8, 28), 1, 1, 0.78), trim, 0, 1.0, 0, model);
-  band.rotation.x = Math.PI / 2; attach(band, B.hips);
-  for (const [sx, thigh, shin, foot, shinB] of [[1, B.thL, B.snL, B.ftL, B.snL], [-1, B.thR, B.snR, B.ftR, B.snR]] as [number, string, string, string, string][]) {
-    const leg = mesh(new THREE.CylinderGeometry(0.112, 0.128, 0.34, 20, 1, true), shortsMat, 0.089 * sx, 0.78, 0.0, model);
-    attach(leg, thigh);
-    // meião
-    const sock = mesh(new THREE.CylinderGeometry(0.056, 0.047, 0.2, 16), trim, 0.089 * sx, 0.255, -0.012, model);
-    attach(sock, shin);
-    const sockStripe = mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.025, 16), accent, 0.089 * sx, 0.335, -0.012, model);
-    attach(sockStripe, shin);
+  for (const [sx, thigh, shin] of [[1, B.thL, B.snL], [-1, B.thR, B.snR]] as [number, string, string][]) {
+    const up = mesh(new THREE.CylinderGeometry(0.128, 0.092, 0.46, 22, 1, true), pantsMat, 0.089 * sx, 0.745, 0, model);
+    attach(up, thigh);
+    const hipJ = mesh(new THREE.SphereGeometry(0.125, 18, 14), pantsMat, 0.089 * sx, 0.9, 0, model);
+    attach(hipJ, thigh);
+    const knee = mesh(new THREE.SphereGeometry(0.088, 18, 14), pantsMat, 0.089 * sx, 0.532, 0, model);
+    attach(knee, shin);
+    // a canela do modelo desce inclinada para trás e a panturrilha é bem projetada atrás
+    const low = mesh(new THREE.CylinderGeometry(0.112, 0.092, 0.47, 22, 1, true), pantsMat, 0.089 * sx, 0.31, -0.034, model);
+    low.rotation.x = 0.09; attach(low, shin);
+    const hemP = mesh(new THREE.TorusGeometry(0.092, 0.006, 8, 22), seam, 0.089 * sx, 0.083, -0.05, model);
+    hemP.rotation.x = Math.PI / 2; attach(hemP, shin);
     // tênis
-    const shoe = mesh(new THREE.SphereGeometry(1, 20, 14), shoeMat, 0.089 * sx, 0.058, 0.02, model);
-    shoe.scale.set(0.058, 0.062, 0.14); attach(shoe, foot);
-    const toe = mesh(new THREE.SphereGeometry(1, 16, 12), accent, 0.089 * sx, 0.05, 0.085, model);
-    toe.scale.set(0.068, 0.02, 0.085); attach(toe, foot);
-    const soleM = mesh(new THREE.BoxGeometry(0.11, 0.022, 0.27), sole, 0.089 * sx, 0.011, 0.03, model);
-    attach(soleM, foot);
-    void shinB;
+    const shoeColor = info.calcado === 'tenis-azul' ? 0x1f4fae : 0x151517;
+    const shoeBody = cloth(shoeColor, 0.5), whiteSole = mat(0xf2f2f2, 0.6);
+    const shoe = mesh(new THREE.SphereGeometry(1, 20, 14), shoeBody, 0.089 * sx, 0.06, 0.035, model);
+    shoe.scale.set(0.072, 0.078, 0.17); attach(shoe, shin === B.snL ? B.ftL : B.ftR);
+    const toe = mesh(new THREE.SphereGeometry(1, 16, 12), cloth(shoeColor, 0.45), 0.089 * sx, 0.05, 0.085, model);
+    toe.scale.set(0.068, 0.034, 0.095); attach(toe, shin === B.snL ? B.ftL : B.ftR);
+    const lace = mesh(new THREE.BoxGeometry(0.03, 0.008, 0.09), trim, 0.089 * sx, 0.112, 0.04, model);
+    attach(lace, shin === B.snL ? B.ftL : B.ftR);
+    const soleM = mesh(new THREE.BoxGeometry(0.125, 0.024, 0.3), whiteSole, 0.089 * sx, 0.011, 0.045, model);
+    attach(soleM, shin === B.snL ? B.ftL : B.ftR);
   }
-  // munhequeiras
+  // munhequeiras na cor do time (identificam o time, já que as roupas são pretas)
   for (const [sx, fore] of [[1, B.faL], [-1, B.faR]] as [number, string][]) {
-    const wr = mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.05, 14), trim, 0.69 * sx, 1.441, -0.067, model);
+    const wr = mesh(new THREE.CylinderGeometry(0.039, 0.039, 0.055, 14), teamBand, 0.69 * sx, 1.441, -0.067, model);
     wr.rotation.z = Math.PI / 2; attach(wr, fore);
   }
 

@@ -4,7 +4,7 @@
 // Os atletas ativos ficam em cache na memória para o lobby sortear sem acessar o banco.
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { ATTR_KEYS, AthleteInfo, HAIR_STYLES } from '../shared/types';
+import { ATTR_KEYS, AthleteInfo, BOTTOMS, DEFAULT_OUTFIT, HAIR_STYLES, SHOES, TOPS } from '../shared/types';
 
 type NewAthlete = Omit<AthleteInfo, 'id'>;
 
@@ -21,10 +21,10 @@ interface Driver {
   close(): Promise<void>;
 }
 
-const COLS = ['nome', 'apelido', 'numero', 'sala', 'overall', 'altura', ...ATTR_KEYS, 'corPele', 'estiloCabelo', 'corCabelo', 'ativo'];
+const COLS = ['nome', 'apelido', 'numero', 'sala', 'overall', 'altura', ...ATTR_KEYS, 'corPele', 'estiloCabelo', 'corCabelo', 'roupaTop', 'roupaBottom', 'calcado', 'ativo'];
 const vals = (a: NewAthlete) => [
   a.nome, a.apelido, a.numero, a.sala, a.overall, a.altura, ...ATTR_KEYS.map((k) => a.attrs[k]),
-  a.corPele, a.estiloCabelo, a.corCabelo, a.ativo,
+  a.corPele, a.estiloCabelo, a.corCabelo, a.roupaTop, a.roupaBottom, a.calcado, a.ativo,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,7 +32,8 @@ function rowToAthlete(r: any): AthleteInfo {
   return {
     id: Number(r.id), nome: r.nome, apelido: r.apelido, numero: Number(r.numero), sala: r.sala, overall: Number(r.overall), altura: r.altura,
     attrs: Object.fromEntries(ATTR_KEYS.map((k) => [k, Number(r[k])])) as unknown as AthleteInfo['attrs'],
-    corPele: r.corPele, estiloCabelo: r.estiloCabelo, corCabelo: r.corCabelo, ativo: !!r.ativo,
+    corPele: r.corPele, estiloCabelo: r.estiloCabelo, corCabelo: r.corCabelo,
+    roupaTop: r.roupaTop ?? DEFAULT_OUTFIT.roupaTop, roupaBottom: r.roupaBottom ?? DEFAULT_OUTFIT.roupaBottom, calcado: r.calcado ?? DEFAULT_OUTFIT.calcado, ativo: !!r.ativo,
   };
 }
 
@@ -52,10 +53,16 @@ async function sqliteDriver(path: string): Promise<Driver> {
           overall INTEGER NOT NULL, altura TEXT NOT NULL,
           ${ATTR_KEYS.map((k) => `${k} INTEGER NOT NULL`).join(', ')},
           corPele TEXT NOT NULL, estiloCabelo TEXT NOT NULL, corCabelo TEXT NOT NULL,
+          roupaTop TEXT NOT NULL DEFAULT 'regata-preta', roupaBottom TEXT NOT NULL DEFAULT 'calca-preta', calcado TEXT NOT NULL DEFAULT 'tenis-preto',
           ativo INTEGER NOT NULL DEFAULT 1,
           criadoEm TEXT NOT NULL DEFAULT (datetime('now')), atualizadoEm TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);`);
+      // migração: bancos criados antes das roupas
+      const have = new Set((db.prepare('PRAGMA table_info(athletes)').all() as { name: string }[]).map((c) => c.name));
+      for (const [c, d] of [['roupaTop', 'regata-preta'], ['roupaBottom', 'calca-preta'], ['calcado', 'tenis-preto']]) {
+        if (!have.has(c)) db.exec(`ALTER TABLE athletes ADD COLUMN ${c} TEXT NOT NULL DEFAULT '${d}'`);
+      }
     },
     async all() { return (db.prepare('SELECT * FROM athletes ORDER BY sala, nome').all() as unknown[]).map(rowToAthlete); },
     async insert(a) {
@@ -101,10 +108,14 @@ async function pgDriver(url: string): Promise<Driver> {
           overall INTEGER NOT NULL, altura TEXT NOT NULL,
           ${ATTR_KEYS.map((k) => `${q(k)} INTEGER NOT NULL`).join(', ')},
           "corPele" TEXT NOT NULL, "estiloCabelo" TEXT NOT NULL, "corCabelo" TEXT NOT NULL,
+          "roupaTop" TEXT NOT NULL DEFAULT 'regata-preta', "roupaBottom" TEXT NOT NULL DEFAULT 'calca-preta', "calcado" TEXT NOT NULL DEFAULT 'tenis-preto',
           ativo BOOLEAN NOT NULL DEFAULT TRUE,
           "criadoEm" TIMESTAMPTZ NOT NULL DEFAULT now(), "atualizadoEm" TIMESTAMPTZ NOT NULL DEFAULT now()
         );
-        CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);`);
+        CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+        ALTER TABLE athletes ADD COLUMN IF NOT EXISTS "roupaTop" TEXT NOT NULL DEFAULT 'regata-preta';
+        ALTER TABLE athletes ADD COLUMN IF NOT EXISTS "roupaBottom" TEXT NOT NULL DEFAULT 'calca-preta';
+        ALTER TABLE athletes ADD COLUMN IF NOT EXISTS "calcado" TEXT NOT NULL DEFAULT 'tenis-preto';`);
     },
     async all() { return (await pool.query('SELECT * FROM athletes ORDER BY sala, nome')).rows.map(rowToAthlete); },
     async insert(a) {
@@ -191,8 +202,13 @@ export function parseAthlete(body: unknown): NewAthlete | string {
   if (typeof b.corPele !== 'string' || !hex.test(b.corPele)) return 'Cor de pele inválida';
   if (typeof b.corCabelo !== 'string' || !hex.test(b.corCabelo)) return 'Cor de cabelo inválida';
   if (!HAIR_STYLES.includes(b.estiloCabelo as never)) return 'Estilo de cabelo inválido';
+  const roupaTop = b.roupaTop ?? DEFAULT_OUTFIT.roupaTop, roupaBottom = b.roupaBottom ?? DEFAULT_OUTFIT.roupaBottom, calcado = b.calcado ?? DEFAULT_OUTFIT.calcado;
+  if (!TOPS.includes(roupaTop as never)) return 'Camiseta inválida';
+  if (!BOTTOMS.includes(roupaBottom as never)) return 'Parte de baixo inválida';
+  if (!SHOES.includes(calcado as never)) return 'Tênis inválido';
   return {
     nome, apelido, numero, sala, overall, altura, attrs, corPele: b.corPele.toLowerCase(), estiloCabelo: b.estiloCabelo as AthleteInfo['estiloCabelo'],
-    corCabelo: b.corCabelo.toLowerCase(), ativo: b.ativo === undefined ? true : !!b.ativo,
+    corCabelo: b.corCabelo.toLowerCase(),
+    roupaTop: roupaTop as AthleteInfo['roupaTop'], roupaBottom: roupaBottom as AthleteInfo['roupaBottom'], calcado: calcado as AthleteInfo['calcado'], ativo: b.ativo === undefined ? true : !!b.ativo,
   };
 }

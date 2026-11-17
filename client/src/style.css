@@ -271,3 +271,5 @@ body.dark { background:#0b0b0c; }
 .dk input[type=color] { background:#0b0b0d; }
 .dk .sub { color:#8b8578; } .dk .check { color:#cfc8b8; }
 .dk .hairtile { text-transform:none; letter-spacing:0; font-size:11px; font-weight:600; font-family:var(--body); padding:4px 4px 6px; }
+
+.dk .hairtile img { background:radial-gradient(circle at 50% 0%,#74747c,#2c2c31 78%) !important; }

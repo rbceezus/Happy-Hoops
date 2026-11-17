@@ -36,12 +36,17 @@ describe('admin', () => {
     const novo = {
       nome: 'Teste Aluno', apelido: 'Teste', numero: 12, sala: '8º C', overall: 70, altura: 'M',
       attrs: { arremesso3: 60, arremessoMedia: 61, finishing: 62, passe: 63, rebote: 64, defesa: 65, bloqueio: 66, drible: 67 },
-      corPele: '#aa7755', estiloCabelo: 'curto', corCabelo: '#111111',
+      corPele: '#aa7755', estiloCabelo: 'curto', corCabelo: '#111111', roupaTop: 'polo-preta', roupaBottom: 'jeans-azul', calcado: 'tenis-azul',
     };
     const c = await post('/api/admin/athletes', novo, cookie);
     expect(c.status).toBe(201);
     const created = await c.json();
     expect(created.overall).toBe(70);
+    expect([created.roupaTop, created.roupaBottom, created.calcado]).toEqual(['polo-preta', 'jeans-azul', 'tenis-azul']);
+    expect((await post('/api/admin/athletes', { ...novo, roupaTop: 'terno-rosa' }, cookie)).status).toBe(400);
+    const semRoupa = { ...novo } as Record<string, unknown>; delete semRoupa.roupaTop; delete semRoupa.roupaBottom; delete semRoupa.calcado;
+    const def = await (await post('/api/admin/athletes', semRoupa, cookie)).json();
+    expect([def.roupaTop, def.roupaBottom, def.calcado]).toEqual(['regata-preta', 'calca-preta', 'tenis-preto']);
     const bad = await post('/api/admin/athletes', { ...novo, attrs: { ...novo.attrs, defesa: 5 } }, cookie);
     expect(bad.status).toBe(400);
     const up = await fetch(`${base}/api/admin/athletes/${created.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', cookie }, body: JSON.stringify({ ...novo, overall: 88 }) });

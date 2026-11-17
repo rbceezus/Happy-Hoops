@@ -57,7 +57,7 @@ export interface AthletePose {
   defending?: boolean;
 }
 
-export type Marker = 'active' | 'mate' | 'none';
+export type Marker = 'active' | 'mate' | 'foe' | 'none';
 
 export interface AthleteModel {
   root: THREE.Group;
@@ -91,10 +91,10 @@ export function buildProcedural(info: AthleteInfo, teamColor: number, opts: { la
   const skin = new THREE.MeshStandardMaterial({ color: info.corPele, roughness: 0.48, metalness: 0 });
   const skinDark = mat(shade(info.corPele, 0.84), 0.55);
   const lips = mat(new THREE.Color(info.corPele).lerp(new THREE.Color('#9a4a44'), 0.32).getHex(), 0.45);
-  const jersey = new THREE.MeshStandardMaterial({ color: teamColor, roughness: 0.62, metalness: 0 });
+  const jersey = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.8, metalness: 0 });
   const trim = mat(0xffffff, 0.5);
-  const shortsMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(teamColor).multiplyScalar(0.6).getHex(), roughness: 0.65, side: THREE.DoubleSide });
-  const shoe = mat(0xf6f6f6, 0.4);
+  const shortsMat = new THREE.MeshStandardMaterial({ color: info.roupaBottom === 'jeans-azul' ? 0x2c5aa0 : info.roupaBottom === 'jeans-cinza' ? 0x6c7078 : 0x151517, roughness: 0.8, side: THREE.DoubleSide });
+  const shoe = mat(info.calcado === 'tenis-azul' ? 0x1f4fae : 0x151517, 0.45);
   const accent = mat(teamColor, 0.4);
   const sole = mat(0x202026, 0.8);
 

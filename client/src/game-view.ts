@@ -442,7 +442,7 @@ export class GameView {
       const vf = vx * Math.sin(a[2]) + vz * Math.cos(a[2]);
       const vl = vx * Math.cos(a[2]) - vz * Math.sin(a[2]);
       m.pose({ speed: Math.hypot(vx, vz), flags: a[4], shotT: a[6], anim: a[7], y: a[3], rot: a[2], dt, t, vf, vl, defending: Math.floor(i / 2) !== s.poss });
-      m.setMarker(i === myId ? "active" : Math.floor(i / 2) === this.seat ? "mate" : "none");
+      m.setMarker(i === myId ? "active" : Math.floor(i / 2) === this.seat ? "mate" : "foe");
     }
 
     // bola

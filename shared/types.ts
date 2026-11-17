@@ -34,6 +34,19 @@ export const HAIR_LABELS: Record<HairStyle, string> = {
   dreads: 'Dreads', moicano: 'Moicano', coque: 'Coque', rabo: 'Rabo de cavalo', liso: 'Liso longo',
 };
 
+export type TopId = 'polo-preta' | 'tshirt-preta' | 'regata-preta';
+export type BottomId = 'calca-preta' | 'jeans-cinza' | 'jeans-azul';
+export type ShoesId = 'tenis-preto' | 'tenis-azul';
+export const TOPS: TopId[] = ['polo-preta', 'tshirt-preta', 'regata-preta'];
+export const BOTTOMS: BottomId[] = ['calca-preta', 'jeans-cinza', 'jeans-azul'];
+export const SHOES: ShoesId[] = ['tenis-preto', 'tenis-azul'];
+export const OUTFIT_LABELS: Record<TopId | BottomId | ShoesId, string> = {
+  'polo-preta': 'Camiseta polo preta', 'tshirt-preta': 'T-shirt preta', 'regata-preta': 'Regata preta',
+  'calca-preta': 'Calça preta', 'jeans-cinza': 'Jeans cinza', 'jeans-azul': 'Jeans azul',
+  'tenis-preto': 'Tênis preto', 'tenis-azul': 'Tênis azul',
+};
+export const DEFAULT_OUTFIT = { roupaTop: 'regata-preta' as TopId, roupaBottom: 'calca-preta' as BottomId, calcado: 'tenis-preto' as ShoesId };
+
 export interface AthleteInfo {
   id: number;
   nome: string;
@@ -46,6 +59,9 @@ export interface AthleteInfo {
   corPele: string; // #rrggbb
   estiloCabelo: HairStyle;
   corCabelo: string;
+  roupaTop: TopId;
+  roupaBottom: BottomId;
+  calcado: ShoesId;
   ativo: boolean;
 }
 

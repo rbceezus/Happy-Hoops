@@ -1,5 +1,5 @@
 // Painel do criador: login, lista de atletas, edição (overall manual, atributos, pele, cabelo, sala) com pré-visualização 3D.
-import { ATTR_KEYS, ATTR_LABELS, AthleteInfo, HAIR_LABELS, HAIR_STYLES } from '../../shared/types';
+import { ATTR_KEYS, ATTR_LABELS, AthleteInfo, BOTTOMS, DEFAULT_OUTFIT, HAIR_LABELS, HAIR_STYLES, OUTFIT_LABELS, SHOES, TOPS } from '../../shared/types';
 import { Preview3D, portrait } from './preview';
 
 const SKINS = ['#ffe0c7', '#f1c9a5', '#e0ac82', '#c68b62', '#a96f4a', '#8d5a3c', '#6b4128', '#3f2615'];
@@ -9,7 +9,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const blank = (): Omit<AthleteInfo, 'id'> & { id?: number } => ({
   nome: '', apelido: '', numero: 10, sala: '', overall: 70, altura: 'M',
   attrs: { arremesso3: 60, arremessoMedia: 60, finishing: 60, passe: 60, rebote: 60, defesa: 60, bloqueio: 60, drible: 60 },
-  corPele: '#e0ac82', estiloCabelo: 'curto', corCabelo: '#1a120d', ativo: true,
+  corPele: '#e0ac82', estiloCabelo: 'curto', corCabelo: '#1a120d', ...DEFAULT_OUTFIT, ativo: true,
 });
 
 async function api(path: string, method = 'GET', body?: unknown) {
@@ -90,6 +90,9 @@ export function initAdmin(app: HTMLElement) {
               <div style="grid-column:1 / -1"><label>Cabelo</label><div class="hairgrid" id="hairgrid"></div></div>
               <div style="grid-column:1 / -1"><label>Cor do cabelo</label><div class="row" style="gap:6px"><input type="color" id="cabelo" value="${cur.corCabelo}" style="flex:0 0 60px"><div class="swatches" id="hairs">${HAIRS.map((c) => `<div class="sw ${c === cur.corCabelo ? 'on' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}</div></div></div>
             </div>
+            <div style="grid-column:1 / -1"><label>Camiseta</label><div class="hairgrid" id="topgrid"></div></div>
+            <div style="grid-column:1 / -1"><label>Parte de baixo</label><div class="hairgrid" id="bottomgrid"></div></div>
+            <div style="grid-column:1 / -1"><label>Tênis</label><div class="hairgrid" id="shoesgrid"></div></div>
             <label class="check"><input type="checkbox" id="ativo" ${cur.ativo ? 'checked' : ''}> Ativo (aparece nas escolhas do jogo)</label>
             <div class="row" style="margin-top:16px">
               <button class="pri" id="save">${cur.id ? 'Salvar alterações' : 'Criar atleta'}</button>
@@ -119,19 +122,25 @@ export function initAdmin(app: HTMLElement) {
     };
     const updatePreview = () => { preview?.set({ ...(cur as AthleteInfo), id: cur.id ?? 0 }); drawHairs(); };
     let hairTimer = 0;
+    const tiles = (gridId: string, items: string[], key: 'estiloCabelo' | 'roupaTop' | 'roupaBottom' | 'calcado', framing: 'head' | 'top' | 'bottom' | 'shoes', label: (i: string) => string) => {
+      const grid = document.getElementById(gridId);
+      if (!grid) return;
+      grid.innerHTML = items.map((it) => `
+        <button type="button" class="hairtile ${cur[key] === it ? 'on' : ''}" data-v="${it}" title="${label(it)}">
+          <img src="${portrait({ ...(cur as AthleteInfo), id: 0, [key]: it } as AthleteInfo, 0xe8631a, 140, framing)}" alt="">
+          <span>${label(it)}</span>
+        </button>`).join('');
+      grid.querySelectorAll<HTMLElement>('.hairtile').forEach((el) => {
+        el.onclick = () => { (cur as Record<string, unknown>)[key] = el.dataset.v; updatePreview(); };
+      });
+    };
     const drawHairs = () => {
       window.clearTimeout(hairTimer);
       hairTimer = window.setTimeout(() => {
-        const grid = document.getElementById('hairgrid');
-        if (!grid) return;
-        grid.innerHTML = HAIR_STYLES.map((h) => `
-          <button type="button" class="hairtile ${cur.estiloCabelo === h ? 'on' : ''}" data-h="${h}" title="${HAIR_LABELS[h]}">
-            <img src="${portrait({ ...(cur as AthleteInfo), id: 0, estiloCabelo: h }, 0xe8631a, 140, 'head')}" alt="">
-            <span>${HAIR_LABELS[h]}</span>
-          </button>`).join('');
-        grid.querySelectorAll<HTMLElement>('.hairtile').forEach((el) => {
-          el.onclick = () => { cur.estiloCabelo = el.dataset.h as AthleteInfo['estiloCabelo']; updatePreview(); };
-        });
+        tiles('hairgrid', HAIR_STYLES, 'estiloCabelo', 'head', (h) => HAIR_LABELS[h as keyof typeof HAIR_LABELS]);
+        tiles('topgrid', TOPS, 'roupaTop', 'top', (h) => OUTFIT_LABELS[h as keyof typeof OUTFIT_LABELS]);
+        tiles('bottomgrid', BOTTOMS, 'roupaBottom', 'bottom', (h) => OUTFIT_LABELS[h as keyof typeof OUTFIT_LABELS]);
+        tiles('shoesgrid', SHOES, 'calcado', 'shoes', (h) => OUTFIT_LABELS[h as keyof typeof OUTFIT_LABELS]);
       }, 60);
     };
 

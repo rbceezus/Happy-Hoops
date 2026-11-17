@@ -14,8 +14,8 @@ const portraitCache = new Map<string, string>();
 let pr: THREE.WebGLRenderer | null = null;
 
 /** Retrato em dataURL (um renderer compartilhado, evita vários contextos WebGL). */
-export function portrait(info: AthleteInfo, color = 0xe8631a, size = 220, framing: 'body' | 'head' = 'body'): string {
-  const key = JSON.stringify([info.corPele, info.estiloCabelo, info.corCabelo, info.altura, info.numero, color, size, framing]);
+export function portrait(info: AthleteInfo, color = 0xe8631a, size = 220, framing: 'body' | 'head' | 'top' | 'bottom' | 'shoes' = 'body'): string {
+  const key = JSON.stringify([info.corPele, info.estiloCabelo, info.corCabelo, info.altura, info.numero, info.roupaTop, info.roupaBottom, info.calcado, color, size, framing]);
   const hit = portraitCache.get(key);
   if (hit) return hit;
   if (!pr) {
@@ -28,12 +28,15 @@ export function portrait(info: AthleteInfo, color = 0xe8631a, size = 220, framin
   const scene = new THREE.Scene();
   lights(scene);
   const m = buildAthlete(info, color, { label: false });
-  m.root.rotation.y = framing === 'head' ? 0.55 : 0.35;
+  m.root.rotation.y = framing === 'head' ? 0.55 : framing === 'shoes' ? 0.7 : framing === 'bottom' ? 0.45 : 0.35;
   m.pose({ speed: 0, flags: 0, shotT: -1, anim: 0, y: 0, rot: 0, dt: 0.016, t: 0 });
   scene.add(m.root);
   const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 50);
   const hs = m.height / 1.83;
   if (framing === 'head') { cam.position.set(0, 1.8 * hs, 0.95); cam.lookAt(0, 1.75 * hs, 0); }
+  else if (framing === 'top') { cam.position.set(0, 1.3 * hs, 2.1); cam.lookAt(0, 1.22 * hs, 0); }
+  else if (framing === 'bottom') { cam.position.set(0, 0.62 * hs, 2.7); cam.lookAt(0, 0.55 * hs, 0); }
+  else if (framing === 'shoes') { cam.position.set(0, 0.2 * hs, 1.35); cam.lookAt(0, 0.1 * hs, 0); }
   else { cam.position.set(0, 1.42, 3.0); cam.lookAt(0, 1.25, 0); }
   pr.render(scene, cam);
   const url = pr.domElement.toDataURL('image/png');

@@ -25,7 +25,7 @@ async function roundTrip(port: number, env: Record<string, string>) {
   const nome = `Persistente ${Date.now()}`;
   const r = await fetch(`${base}/api/admin/athletes`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', cookie },
-    body: JSON.stringify({ nome, sala: '9º Z', numero: 8, overall: 77, altura: 'G', corPele: '#8d5a3c', estiloCabelo: 'black', corCabelo: '#111111',
+    body: JSON.stringify({ nome, sala: '9º Z', numero: 8, overall: 77, altura: 'G', corPele: '#8d5a3c', estiloCabelo: 'black', corCabelo: '#111111', roupaTop: 'tshirt-preta', roupaBottom: 'jeans-cinza', calcado: 'tenis-azul',
       attrs: { arremesso3: 50, arremessoMedia: 51, finishing: 52, passe: 53, rebote: 54, defesa: 55, bloqueio: 56, drible: 57 } }),
   });
   expect(r.status).toBe(201);
@@ -38,6 +38,7 @@ async function roundTrip(port: number, env: Record<string, string>) {
   const list = await (await fetch(`${base}/api/admin/athletes`, { headers: { cookie: cookie2 } })).json();
   const found = list.find((a: { nome: string }) => a.nome === nome);
   expect(found?.attrs.bloqueio).toBe(56);
+  expect([found.roupaTop, found.roupaBottom, found.calcado]).toEqual(['tshirt-preta', 'jeans-cinza', 'tenis-azul']);
   // importar o backup de novo não duplica
   const imp = await (await fetch(`${base}/api/admin/import`, { method: 'POST', headers: { 'Content-Type': 'application/json', cookie: cookie2 }, body: JSON.stringify(exp) })).json();
   expect(imp.adicionados).toBe(0);
